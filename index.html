@@ -465,6 +465,11 @@ button{ cursor:pointer; }
 
     <div id="ad-banner-convoys" class="ad-banner hidden"></div>
 
+    <div id="my-invites-section" class="hidden">
+      <div class="section-label">Invites waiting for you</div>
+      <div id="my-invites-list" class="convoy-list" style="margin-bottom:16px;"></div>
+    </div>
+
     <div class="section-label">My convoys</div>
     <div id="my-convoys-list" class="convoy-list">
       <div class="convoy-list-empty">Loading…</div>
@@ -704,11 +709,12 @@ button{ cursor:pointer; }
           </label>
         </div>
         <div class="field" style="margin-top:12px;">
-          <label for="add-member-email">Add member by email</label>
+          <label for="add-member-username">Invite member by username</label>
           <div class="btn-row">
-            <input id="add-member-email" type="email" placeholder="email@example.com" />
-            <button id="add-member-btn" class="btn btn-primary btn-sm" type="button">Add</button>
+            <input id="add-member-username" type="text" placeholder="jordan_rivera" maxlength="20" />
+            <button id="add-member-btn" class="btn btn-primary btn-sm" type="button">Invite</button>
           </div>
+          <div class="field-hint">They'll see this as a pending invite and must accept it before joining.</div>
         </div>
         <div id="owner-settings-msg" class="msg"></div>
       </div>
@@ -920,27 +926,84 @@ $('#login-form').addEventListener('submit', async (e) => {
   await afterAuthSuccess();
 });
 
+function isValidUsernameFormat(u){ return /^[a-zA-Z0-9_]{3,20}$/.test(u || ''); }
+
+async function checkUsernameAvailable(username){
+  if (!supabaseClient) return null;
+  const { data, error } = await supabaseClient.rpc('is_username_available', { p_username: username });
+  if (error) { console.warn('username availability check failed', error); return null; }
+  return data === true;
+}
+
+function wireUsernameLiveCheck(inputSel, hintSel, getOwnUsername){
+  const input = $(inputSel);
+  const hint = $(hintSel);
+  const defaultText = hint.textContent;
+  let debounceTimer = null;
+  input.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    const val = input.value.trim();
+    hint.classList.remove('ok', 'taken');
+    if (!val) { hint.textContent = defaultText; return; }
+    if (!isValidUsernameFormat(val)) { hint.textContent = 'Only letters, numbers, underscores — 3 to 20 characters.'; hint.classList.add('taken'); return; }
+    const ownUsername = getOwnUsername ? getOwnUsername() : null;
+    if (ownUsername && val.toLowerCase() === ownUsername.toLowerCase()) { hint.textContent = 'This is already your username.'; hint.classList.add('ok'); return; }
+    hint.textContent = 'Checking availability…';
+    debounceTimer = setTimeout(async () => {
+      const available = await checkUsernameAvailable(val);
+      if (input.value.trim() !== val) return; // value changed while the check was in flight
+      if (available === true) { hint.textContent = 'Username is available.'; hint.classList.add('ok'); }
+      else if (available === false) { hint.textContent = 'That username is already taken.'; hint.classList.add('taken'); }
+      else { hint.textContent = defaultText; }
+    }, 450);
+  });
+}
+wireUsernameLiveCheck('#signup-username', '#signup-username-hint');
+wireUsernameLiveCheck('#profile-username', '#profile-username-hint', () => state.profile?.username);
+
 $('#signup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#auth-msg')) return;
   setFormMsg('#auth-msg', '');
+  const username = $('#signup-username').value.trim();
   const fullName = $('#signup-fullname').value.trim();
   const email = $('#signup-email').value.trim();
   const mobile = $('#signup-mobile').value.trim();
   const blood = $('#signup-blood').value;
   const password = $('#signup-password').value;
+  if (!isValidUsernameFormat(username)) {
+    setFormMsg('#auth-msg', 'Username must be 3-20 characters: letters, numbers, and underscores only.', 'error');
+    return;
+  }
   if (!blood) { setFormMsg('#auth-msg', 'Please select a blood group.', 'error'); return; }
+
   const submitBtn = e.target.querySelector('button[type=submit]');
   submitBtn.disabled = true;
+
+  const available = await checkUsernameAvailable(username);
+  if (available === false) {
+    submitBtn.disabled = false;
+    setFormMsg('#auth-msg', 'That username is already taken. Please choose another.', 'error');
+    return;
+  }
+
   const { data, error } = await supabaseClient.auth.signUp({
     email, password,
-    options: { data: { full_name: fullName, mobile_number: mobile, blood_group: blood } }
+    options: { data: { full_name: fullName, mobile_number: mobile, blood_group: blood, username } }
   });
   submitBtn.disabled = false;
   if (error) { setFormMsg('#auth-msg', error.message, 'error'); return; }
 
   if (data.session) {
-    await ensureProfile(data.user, { fullName, mobile, blood });
+    const result = await ensureProfile(data.user, { fullName, mobile, blood, username });
+    if (!result.ok) {
+      const isDupe = result.error?.code === '23505' || /duplicate|unique/i.test(result.error?.message || '');
+      setFormMsg('#auth-msg', isDupe
+        ? 'That username was just taken by someone else. Pick a different one below — your account was still created.'
+        : (result.error?.message || 'Could not finish creating your profile.'), 'error');
+      await afterAuthSuccess({ forceProfileScreen: true });
+      return;
+    }
     await afterAuthSuccess();
   } else {
     setFormMsg('#auth-msg', 'Account created. Check your email to confirm, then log in.', 'info');
@@ -954,30 +1017,50 @@ $('#signout-btn').addEventListener('click', async () => {
   location.reload();
 });
 
+// Creates the profile row on first login/signup only — deliberately never
+// overwrites an existing profile (so a login's fallback values can't clobber
+// a username or other fields the person has since customized).
 async function ensureProfile(user, hints){
   hints = hints || {};
+  const { data: existing } = await supabaseClient.from('profiles').select('id').eq('id', user.id).maybeSingle();
+  if (existing) return { ok: true, created: false };
+
   const fullName = hints.fullName || user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Driver');
   const mobile = hints.mobile ?? user.user_metadata?.mobile_number ?? null;
   const blood = hints.blood || user.user_metadata?.blood_group || 'Unknown';
-  const { error } = await supabaseClient.from('profiles').upsert({
-    id: user.id, full_name: fullName, email: user.email, mobile_number: mobile, blood_group: blood
-  }, { onConflict: 'id' });
-  if (error) console.error('profile upsert failed', error);
+  const username = hints.username || user.user_metadata?.username;
+  if (!username) return { ok: false, error: { message: 'A username is required to finish creating your profile.' } };
+
+  const { error } = await supabaseClient.from('profiles').insert({
+    id: user.id, username, full_name: fullName, email: user.email, mobile_number: mobile, blood_group: blood
+  });
+  if (error) { console.error('profile insert failed', error); return { ok: false, error }; }
+  return { ok: true, created: true };
 }
 
-async function afterAuthSuccess(){
+async function afterAuthSuccess(opts){
+  opts = opts || {};
   const { data: { session } } = await supabaseClient.auth.getSession();
   state.session = session;
   state.user = session.user;
 
   const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
-  state.profile = profile || { id: state.user.id, full_name: state.user.email.split('@')[0], email: state.user.email, location_sharing_enabled: true };
+  state.profile = profile || {
+    id: state.user.id, username: '', full_name: state.user.email.split('@')[0],
+    email: state.user.email, location_sharing_enabled: true
+  };
 
   $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
 
   state.isAdmin = !!state.profile.is_admin;
   $('#admin-btn').classList.toggle('hidden', !state.isAdmin);
   await loadAllAds();
+
+  if (opts.forceProfileScreen || !profile) {
+    state.profileReturnScreen = 'convoys';
+    openProfileScreen();
+    return;
+  }
 
   const savedConvoyId = localStorage.getItem('convoy_intercom_active_convoy_id');
   if (savedConvoyId) {
@@ -1001,9 +1084,63 @@ supabaseClient?.auth.onAuthStateChange((event) => {
    ============================================================ */
 async function showConvoysScreen(){
   showScreen('convoys');
+  await loadMyInvites();
   await loadMyConvoys();
   renderAdBanner('convoys_screen', 'ad-banner-convoys');
 }
+
+async function loadMyInvites(){
+  const section = $('#my-invites-section');
+  const list = $('#my-invites-list');
+  const { data, error } = await supabaseClient
+    .from('convoy_members')
+    .select('convoy_id, convoys(id, name, code)')
+    .eq('user_id', state.user.id)
+    .eq('status', 'pending');
+
+  const invites = (data || []).filter(r => r.convoys);
+  if (error || invites.length === 0) { section.classList.add('hidden'); list.innerHTML = ''; return; }
+
+  section.classList.remove('hidden');
+  list.innerHTML = invites.map(r => {
+    const initial = (r.convoys.name || '?').trim().charAt(0).toUpperCase() || '?';
+    return `
+    <div class="convoy-row" style="cursor:default;">
+      <div class="convoy-avatar" style="background:${colorForUser(r.convoy_id)}">${escapeHtml(initial)}</div>
+      <div class="convoy-row-main">
+        <div class="convoy-row-name">${escapeHtml(r.convoys.name)}</div>
+        <div class="convoy-row-code">Invited to join · CODE ${escapeHtml(r.convoys.code)}</div>
+      </div>
+      <div style="display:flex; gap:6px; flex:none;">
+        <button class="btn btn-primary btn-sm invite-accept-btn" data-convoy-id="${escapeHtml(r.convoy_id)}">Accept</button>
+        <button class="btn btn-ghost btn-sm invite-decline-btn" data-convoy-id="${escapeHtml(r.convoy_id)}">Decline</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+$('#my-invites-list').addEventListener('click', async (e) => {
+  const acceptBtn = e.target.closest('.invite-accept-btn');
+  const declineBtn = e.target.closest('.invite-decline-btn');
+  if (acceptBtn) {
+    acceptBtn.disabled = true;
+    const { error } = await supabaseClient
+      .from('convoy_members').update({ status: 'active' })
+      .eq('convoy_id', acceptBtn.dataset.convoyId).eq('user_id', state.user.id);
+    if (error) { showToast(error.message || 'Failed to accept invite.', 'error'); acceptBtn.disabled = false; return; }
+    showToast('Invite accepted!');
+    await loadMyInvites();
+    await loadMyConvoys();
+  } else if (declineBtn) {
+    declineBtn.disabled = true;
+    const { error } = await supabaseClient
+      .from('convoy_members').delete()
+      .eq('convoy_id', declineBtn.dataset.convoyId).eq('user_id', state.user.id);
+    if (error) { showToast(error.message || 'Failed to decline invite.', 'error'); declineBtn.disabled = false; return; }
+    showToast('Invite declined.');
+    await loadMyInvites();
+  }
+});
 
 async function loadMyConvoys(){
   const list = $('#my-convoys-list');
@@ -1011,7 +1148,8 @@ async function loadMyConvoys(){
   const { data, error } = await supabaseClient
     .from('convoy_members')
     .select('role, convoys(id, name, code, created_by, ptt_enabled, voice_muted)')
-    .eq('user_id', state.user.id);
+    .eq('user_id', state.user.id)
+    .eq('status', 'active');
 
   if (error) { list.innerHTML = '<div class="convoy-list-empty">Could not load your convoys.</div>'; return; }
 
@@ -1023,10 +1161,10 @@ async function loadMyConvoys(){
     return;
   }
 
-  // Member counts, so each row reads like a WhatsApp group ("12 members")
-  // rather than just showing the join code.
+  // Member counts (active only), so each row reads like a WhatsApp group
+  // ("12 members") rather than just showing the join code.
   const convoyIds = convoys.map(c => c.id);
-  const { data: allMembers } = await supabaseClient.from('convoy_members').select('convoy_id').in('convoy_id', convoyIds);
+  const { data: allMembers } = await supabaseClient.from('convoy_members').select('convoy_id').in('convoy_id', convoyIds).eq('status', 'active');
   const countMap = new Map();
   (allMembers || []).forEach(m => countMap.set(m.convoy_id, (countMap.get(m.convoy_id) || 0) + 1));
 
@@ -1165,7 +1303,7 @@ async function loadInitialMembersAndLocations(){
   const memberIds = sortedMembers.map(m => m.user_id);
   let profilesById = new Map();
   if (memberIds.length) {
-    const { data: profs } = await supabaseClient.from('profiles').select('id, blood_group, mobile_number, email').in('id', memberIds);
+    const { data: profs } = await supabaseClient.from('profiles').select('id, username, blood_group, mobile_number, email').in('id', memberIds);
     profilesById = new Map((profs || []).map(p => [p.id, p]));
   }
 
@@ -1173,10 +1311,10 @@ async function loadInitialMembersAndLocations(){
     state.channelNoCounter++;
     const prof = profilesById.get(m.user_id) || {};
     state.members.set(m.user_id, {
-      display_name: m.display_name, role: m.role, online: false,
+      display_name: m.display_name, role: m.role, online: false, status: m.status,
       last_seen: m.last_seen, channel_no: state.channelNoCounter,
       location_sharing_enabled: m.location_sharing_enabled,
-      blood_group: prof.blood_group, mobile_number: prof.mobile_number, email: prof.email
+      username: prof.username, blood_group: prof.blood_group, mobile_number: prof.mobile_number, email: prof.email
     });
   });
 
@@ -1196,10 +1334,10 @@ async function loadInitialMembersAndLocations(){
 }
 
 async function fetchAndMergeProfile(userId){
-  const { data: prof } = await supabaseClient.from('profiles').select('id, blood_group, mobile_number, email').eq('id', userId).maybeSingle();
+  const { data: prof } = await supabaseClient.from('profiles').select('id, username, blood_group, mobile_number, email').eq('id', userId).maybeSingle();
   if (!prof) return;
   const m = state.members.get(userId);
-  if (m) { m.blood_group = prof.blood_group; m.mobile_number = prof.mobile_number; m.email = prof.email; renderMemberList(); }
+  if (m) { m.username = prof.username; m.blood_group = prof.blood_group; m.mobile_number = prof.mobile_number; m.email = prof.email; renderMemberList(); }
 }
 
 async function leaveConvoy(){
@@ -1307,18 +1445,19 @@ $('#setting-mute-toggle').addEventListener('change', async (e) => {
 });
 
 $('#add-member-btn').addEventListener('click', async () => {
-  const emailInput = $('#add-member-email');
-  const email = emailInput.value.trim();
-  if (!email) return;
+  const usernameInput = $('#add-member-username');
+  const username = usernameInput.value.trim();
+  if (!username) return;
   const btn = $('#add-member-btn');
   btn.disabled = true;
   setFormMsg('#owner-settings-msg', '');
-  const { error } = await supabaseClient.rpc('add_member_by_email', { p_convoy_id: state.convoy.id, p_email: email, p_role: 'member' });
+  const { error } = await supabaseClient.rpc('invite_member_by_username', { p_convoy_id: state.convoy.id, p_username: username, p_role: 'member' });
   btn.disabled = false;
-  if (error) { setFormMsg('#owner-settings-msg', error.message || 'Failed to add member.', 'error'); return; }
-  emailInput.value = '';
-  setFormMsg('#owner-settings-msg', 'Member added.', 'info');
-  showToast('Member added to the convoy.');
+  if (error) { setFormMsg('#owner-settings-msg', error.message || 'Failed to send invite.', 'error'); return; }
+  usernameInput.value = '';
+  setFormMsg('#owner-settings-msg', 'Invite sent — pending their acceptance.', 'info');
+  showToast('Invite sent.');
+  await loadInitialMembersAndLocations(); // refresh roster so the pending row shows immediately
 });
 
 async function removeMember(userId){
@@ -1379,27 +1518,54 @@ $('#profile-back-btn').addEventListener('click', () => {
 
 function openProfileScreen(){
   $('#profile-email').value = state.profile.email || state.user.email || '';
+  $('#profile-username').value = state.profile.username || '';
   $('#profile-fullname').value = state.profile.full_name || '';
   $('#profile-mobile').value = state.profile.mobile_number || '';
   $('#profile-blood').value = state.profile.blood_group || 'Unknown';
   $('#profile-location-toggle').checked = state.profile.location_sharing_enabled !== false;
   setFormMsg('#profile-msg', '');
+  const hint = $('#profile-username-hint');
+  hint.textContent = '3-20 characters: letters, numbers, underscores. Must be unique.';
+  hint.classList.remove('ok', 'taken');
   showScreen('profile');
 }
 
 $('#profile-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  const username = $('#profile-username').value.trim();
   const full_name = $('#profile-fullname').value.trim();
   const mobile_number = $('#profile-mobile').value.trim();
   const blood_group = $('#profile-blood').value;
   const location_sharing_enabled = $('#profile-location-toggle').checked;
+
+  if (!isValidUsernameFormat(username)) {
+    setFormMsg('#profile-msg', 'Username must be 3-20 characters: letters, numbers, and underscores only.', 'error');
+    return;
+  }
+
   const submitBtn = e.target.querySelector('button[type=submit]');
   submitBtn.disabled = true;
+
+  const usernameChanged = username.toLowerCase() !== (state.profile.username || '').toLowerCase();
+  if (usernameChanged) {
+    const available = await checkUsernameAvailable(username);
+    if (available === false) {
+      submitBtn.disabled = false;
+      setFormMsg('#profile-msg', 'That username is already taken. Please choose another.', 'error');
+      return;
+    }
+  }
+
   const { error } = await supabaseClient.from('profiles').update({
-    full_name, mobile_number, blood_group, location_sharing_enabled
+    username, full_name, mobile_number, blood_group, location_sharing_enabled
   }).eq('id', state.user.id);
   submitBtn.disabled = false;
-  if (error) { setFormMsg('#profile-msg', error.message || 'Failed to save.', 'error'); return; }
+  if (error) {
+    const isDupe = error.code === '23505' || /duplicate|unique/i.test(error.message || '');
+    setFormMsg('#profile-msg', isDupe ? 'That username is already taken. Please choose another.' : (error.message || 'Failed to save.'), 'error');
+    return;
+  }
+  state.profile.username = username;
   state.profile.full_name = full_name;
   state.profile.mobile_number = mobile_number;
   state.profile.blood_group = blood_group;
@@ -1407,6 +1573,7 @@ $('#profile-form').addEventListener('submit', async (e) => {
   state.profile.location_sharing_enabled = location_sharing_enabled;
   setFormMsg('#profile-msg', 'Saved.', 'info');
   showToast('Profile updated.');
+  $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
   if (wasEnabled && !location_sharing_enabled) {
     // Global switch just turned off — stop sharing immediately if we're in a convoy right now.
     if (state.convoy) {
@@ -2221,10 +2388,11 @@ function renderMemberList(){
 
   list.innerHTML = entries.map(([userId, m]) => {
     const isMe = userId === state.user.id;
+    const pending = m.status === 'pending';
     const loc = state.locations.get(userId);
     const online = isMe ? true : m.online;
     const talking = state.talking.has(userId);
-    const sharingHidden = isMe ? !locationSharingAllowedLocally() : (m.location_sharing_enabled === false);
+    const sharingHidden = pending ? true : (isMe ? !locationSharingAllowedLocally() : (m.location_sharing_enabled === false));
     const dist = (!isMe && loc && !sharingHidden) ? distanceFromMe(loc) : null;
     const locatable = !!loc && !sharingHidden;
     const metaBits = [];
@@ -2236,18 +2404,21 @@ function renderMemberList(){
         <div class="member-name-row">
           <span class="status-dot ${online ? '' : 'offline'}"></span>
           <span class="member-name ${isMe ? 'me' : ''}">${escapeHtml(isMe ? 'You' : m.display_name)}</span>
+          ${m.username ? `<span class="member-tag">@${escapeHtml(m.username)}</span>` : ''}
           ${m.role === 'owner' ? '<span class="member-tag">OWNER</span>' : ''}
+          ${pending ? '<span class="member-tag" style="color:var(--accent)">PENDING</span>' : ''}
           ${talking ? '<span class="member-tag" style="color:var(--accent)">TALKING</span>' : ''}
         </div>
+        ${pending ? `<div class="member-updated">Invited — waiting for them to accept</div>` : `
         <div class="member-stats">
           <span>SPD <b>${(loc && !sharingHidden) ? formatSpeed(loc.speed) : '—'}</b></span>
           ${!isMe ? `<span>DIST <b>${sharingHidden ? 'hidden' : formatDistance(dist)}</b></span>` : ''}
         </div>
-        <div class="member-updated">${online ? 'Online' : 'Offline'} · ${sharingHidden ? 'location hidden' : (loc ? formatRelativeTime(loc.updated_at) : 'no data')}</div>
+        <div class="member-updated">${online ? 'Online' : 'Offline'} · ${sharingHidden ? 'location hidden' : (loc ? formatRelativeTime(loc.updated_at) : 'no data')}</div>`}
         ${metaBits.length ? `<div class="member-meta">${metaBits.join(' · ')}</div>` : ''}
       </div>
       ${locatable ? '<span class="member-locate">📍</span>' : ''}
-      ${(ownerView && !isMe) ? `<button class="member-remove" data-remove-user="${escapeHtml(userId)}" title="Remove from convoy">✕</button>` : ''}
+      ${(ownerView && !isMe) ? `<button class="member-remove" data-remove-user="${escapeHtml(userId)}" title="${pending ? 'Cancel invite' : 'Remove from convoy'}">✕</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -2443,7 +2614,7 @@ document.addEventListener('visibilitychange', () => {
     state.session = session;
     state.user = session.user;
     const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-    state.profile = profile || { id: session.user.id, full_name: session.user.email.split('@')[0], email: session.user.email, location_sharing_enabled: true };
+    state.profile = profile || { id: session.user.id, username: '', full_name: session.user.email.split('@')[0], email: session.user.email, location_sharing_enabled: true };
     $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
     await afterAuthSuccess();
   } else {
