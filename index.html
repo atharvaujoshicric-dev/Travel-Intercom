@@ -154,6 +154,22 @@ button{ cursor:pointer; }
 }
 .convoy-row-badge.owner{ color:var(--accent); border-color:var(--accent); }
 .section-label{ font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+.convoy-avatar{
+  width:38px; height:38px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:700; font-size:15px;
+}
+
+/* ---------- Ad spaces ---------- */
+.ad-banner{ margin-bottom:16px; border-radius:var(--radius-sm); overflow:hidden; border:1px solid var(--line); background:var(--bg-elev-2); }
+.ad-banner img, .ad-banner video{ width:100%; display:block; max-height:180px; object-fit:cover; }
+.ad-banner-caption{ padding:8px 10px; font-size:11.5px; color:var(--muted); display:flex; justify-content:space-between; align-items:center; }
+.ad-banner-compact img, .ad-banner-compact video{ max-height:110px; }
+.ad-manage-row{ display:flex; gap:10px; align-items:center; padding:10px; border-bottom:1px solid var(--line); }
+.ad-manage-row:last-child{ border-bottom:none; }
+.ad-manage-thumb{ width:52px; height:40px; border-radius:6px; object-fit:cover; background:var(--bg-elev-2); flex:none; }
+.ad-manage-main{ flex:1; min-width:0; }
+.ad-manage-title{ font-size:13px; font-weight:700; }
+.ad-manage-sub{ font-size:11px; color:var(--muted); }
 
 /* ---------- Switch toggle ---------- */
 .switch-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; }
@@ -421,6 +437,7 @@ button{ cursor:pointer; }
 <div id="convoys-screen" class="screen hidden">
   <div class="card">
     <div class="top-actions">
+      <button id="admin-btn" class="icon-btn hidden" title="Admin: manage ads">🛠</button>
       <button id="profile-btn" class="icon-btn" title="My profile">👤</button>
       <button id="theme-btn-convoys" class="icon-btn" title="Toggle dark/light">◐</button>
     </div>
@@ -431,6 +448,8 @@ button{ cursor:pointer; }
         <div class="brand-sub">YOUR SAVED GROUPS</div>
       </div>
     </div>
+
+    <div id="ad-banner-convoys" class="ad-banner hidden"></div>
 
     <div class="section-label">My convoys</div>
     <div id="my-convoys-list" class="convoy-list">
@@ -520,6 +539,61 @@ button{ cursor:pointer; }
       <button class="btn btn-primary" type="submit" style="margin-top:14px;">Save changes</button>
     </form>
     <div id="profile-msg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 3b — ADMIN (manage ad spaces: image/video ads)
+     ============================================================ -->
+<div id="admin-screen" class="screen hidden">
+  <div class="card" style="max-width:520px;">
+    <div class="top-actions">
+      <button id="admin-back-btn" class="icon-btn" title="Back">←</button>
+    </div>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-title">Ad manager</div>
+        <div class="brand-sub">ADMIN ONLY</div>
+      </div>
+    </div>
+
+    <form id="ad-form">
+      <div class="field">
+        <label for="ad-title">Title</label>
+        <input id="ad-title" type="text" required maxlength="80" placeholder="e.g. Roadside Assistance Plus" />
+      </div>
+      <div class="field">
+        <label for="ad-placement">Where should this show?</label>
+        <select id="ad-placement">
+          <option value="convoys_screen">My Convoys screen (top banner)</option>
+          <option value="app_screen">Inside a convoy (roster drawer)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="ad-file">Image or video file</label>
+        <input id="ad-file" type="file" accept="image/*,video/*" required />
+        <div class="field-hint">Uploads to your Supabase storage bucket "ads-media".</div>
+      </div>
+      <div class="field">
+        <label for="ad-link">Click-through link (optional)</label>
+        <input id="ad-link" type="url" placeholder="https://example.com" />
+      </div>
+      <div class="switch-row">
+        <div><div class="switch-row-label">Active</div></div>
+        <label class="switch">
+          <input type="checkbox" id="ad-active-toggle" checked />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+      <button class="btn btn-primary" type="submit" style="margin-top:10px;">Upload &amp; publish</button>
+    </form>
+    <div id="ad-form-msg" class="msg"></div>
+
+    <div class="divider-or">Existing ads</div>
+    <div id="ad-manage-list" class="convoy-list" style="max-height:300px;">
+      <div class="convoy-list-empty">Loading…</div>
+    </div>
   </div>
 </div>
 
@@ -614,6 +688,11 @@ button{ cursor:pointer; }
           </div>
         </div>
         <div id="owner-settings-msg" class="msg"></div>
+      </div>
+
+      <div class="drawer-section">
+        <h3>Sponsored</h3>
+        <div id="ad-banner-app" class="ad-banner ad-banner-compact hidden"></div>
       </div>
     </div>
     <div class="drawer-foot">
@@ -723,7 +802,9 @@ const state = {
   healthCheckTimer: null,
   channelNoCounter: 0,
   mySharingEnabledHere: true,
-  profileReturnScreen: 'convoys'
+  profileReturnScreen: 'convoys',
+  isAdmin: false,
+  ads: []
 };
 
 /* ============================================================
@@ -792,6 +873,7 @@ function showScreen(name){
   $('#auth-screen').classList.toggle('hidden', name !== 'auth');
   $('#convoys-screen').classList.toggle('hidden', name !== 'convoys');
   $('#profile-screen').classList.toggle('hidden', name !== 'profile');
+  $('#admin-screen').classList.toggle('hidden', name !== 'admin');
   $('#app-screen').classList.toggle('hidden', name !== 'app');
 }
 function setFormMsg(elId, text, type){
@@ -874,6 +956,10 @@ async function afterAuthSuccess(){
 
   $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
 
+  state.isAdmin = !!state.profile.is_admin;
+  $('#admin-btn').classList.toggle('hidden', !state.isAdmin);
+  await loadAllAds();
+
   const savedConvoyId = localStorage.getItem('convoy_intercom_active_convoy_id');
   if (savedConvoyId) {
     const { data: membership } = await supabaseClient
@@ -897,6 +983,7 @@ supabaseClient?.auth.onAuthStateChange((event) => {
 async function showConvoysScreen(){
   showScreen('convoys');
   await loadMyConvoys();
+  renderAdBanner('convoys_screen', 'ad-banner-convoys');
 }
 
 async function loadMyConvoys(){
@@ -917,15 +1004,26 @@ async function loadMyConvoys(){
     return;
   }
 
-  list.innerHTML = convoys.map(c => `
+  // Member counts, so each row reads like a WhatsApp group ("12 members")
+  // rather than just showing the join code.
+  const convoyIds = convoys.map(c => c.id);
+  const { data: allMembers } = await supabaseClient.from('convoy_members').select('convoy_id').in('convoy_id', convoyIds);
+  const countMap = new Map();
+  (allMembers || []).forEach(m => countMap.set(m.convoy_id, (countMap.get(m.convoy_id) || 0) + 1));
+
+  list.innerHTML = convoys.map(c => {
+    const count = countMap.get(c.id) || 1;
+    const initial = (c.name || '?').trim().charAt(0).toUpperCase() || '?';
+    return `
     <div class="convoy-row" data-convoy-id="${escapeHtml(c.id)}">
+      <div class="convoy-avatar" style="background:${colorForUser(c.id)}">${escapeHtml(initial)}</div>
       <div class="convoy-row-main">
         <div class="convoy-row-name">${escapeHtml(c.name)}</div>
-        <div class="convoy-row-code">CODE ${escapeHtml(c.code)}</div>
+        <div class="convoy-row-code">${count} member${count === 1 ? '' : 's'} · CODE ${escapeHtml(c.code)}</div>
       </div>
       <span class="convoy-row-badge ${c.myRole === 'owner' ? 'owner' : ''}">${c.myRole === 'owner' ? 'OWNER' : 'MEMBER'}</span>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 $('#my-convoys-list').addEventListener('click', (e) => {
@@ -1264,6 +1362,141 @@ $('#profile-form').addEventListener('submit', async (e) => {
     }
   }
   if (state.convoy) renderMySharingToggle();
+});
+
+/* ============================================================
+   7b. ADS — display spaces (image/video) + admin management panel
+   ============================================================ */
+async function loadAllAds(){
+  const { data, error } = await supabaseClient
+    .from('ads').select('*').eq('is_active', true).order('sort_order', { ascending: true });
+  if (error) { console.warn('ads load failed', error); return; }
+  state.ads = data || [];
+}
+
+// Renders (and, if there's more than one ad for this placement, slowly
+// rotates through) the ads for a given placement into a container.
+function renderAdBanner(placement, containerId){
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  const ads = state.ads.filter(a => a.placement === placement);
+  clearTimeout(container._adRotateTimer);
+
+  if (!ads.length) { container.classList.add('hidden'); container.innerHTML = ''; return; }
+  container.classList.remove('hidden');
+
+  let idx = parseInt(container.dataset.adIndex || '0', 10);
+  if (!(idx >= 0 && idx < ads.length)) idx = 0;
+  container.dataset.adIndex = String(idx);
+
+  const ad = ads[idx];
+  const mediaHtml = ad.media_type === 'video'
+    ? `<video src="${escapeHtml(ad.media_url)}" autoplay muted loop playsinline></video>`
+    : `<img src="${escapeHtml(ad.media_url)}" alt="${escapeHtml(ad.title)}" loading="lazy" />`;
+  const inner = `${mediaHtml}<div class="ad-banner-caption"><span>${escapeHtml(ad.title)}</span>${ads.length > 1 ? `<span>${idx + 1}/${ads.length}</span>` : ''}</div>`;
+
+  container.innerHTML = ad.link_url
+    ? `<a href="${escapeHtml(ad.link_url)}" target="_blank" rel="noopener noreferrer" style="color:inherit; text-decoration:none;">${inner}</a>`
+    : inner;
+
+  if (ads.length > 1) {
+    container._adRotateTimer = setTimeout(() => {
+      container.dataset.adIndex = String((idx + 1) % ads.length);
+      renderAdBanner(placement, containerId);
+    }, 6000);
+  }
+}
+
+$('#admin-btn').addEventListener('click', () => { showScreen('admin'); loadAdsForAdmin(); });
+$('#admin-back-btn').addEventListener('click', () => showScreen('convoys'));
+
+async function loadAdsForAdmin(){
+  const list = $('#ad-manage-list');
+  list.innerHTML = '<div class="convoy-list-empty">Loading…</div>';
+  const { data, error } = await supabaseClient.from('ads').select('*').order('created_at', { ascending: false });
+  if (error) { list.innerHTML = '<div class="convoy-list-empty">Could not load ads.</div>'; return; }
+  if (!data || !data.length) { list.innerHTML = '<div class="convoy-list-empty">No ads yet — add one above.</div>'; return; }
+  list.innerHTML = data.map(ad => `
+    <div class="ad-manage-row" data-ad-id="${escapeHtml(ad.id)}">
+      ${ad.media_type === 'video'
+        ? `<video class="ad-manage-thumb" src="${escapeHtml(ad.media_url)}" muted></video>`
+        : `<img class="ad-manage-thumb" src="${escapeHtml(ad.media_url)}" alt="" />`}
+      <div class="ad-manage-main">
+        <div class="ad-manage-title">${escapeHtml(ad.title)}</div>
+        <div class="ad-manage-sub">${ad.placement === 'convoys_screen' ? 'My Convoys banner' : 'In-convoy drawer'} · ${ad.is_active ? 'Active' : 'Inactive'}</div>
+      </div>
+      <label class="switch">
+        <input type="checkbox" class="ad-active-input" ${ad.is_active ? 'checked' : ''} />
+        <span class="switch-slider"></span>
+      </label>
+      <button class="member-remove ad-delete-btn" title="Delete ad">✕</button>
+    </div>
+  `).join('');
+}
+
+$('#ad-manage-list').addEventListener('change', async (e) => {
+  if (!e.target.classList.contains('ad-active-input')) return;
+  const row = e.target.closest('.ad-manage-row');
+  const adId = row.dataset.adId;
+  const is_active = e.target.checked;
+  const { error } = await supabaseClient.from('ads').update({ is_active }).eq('id', adId);
+  if (error) { e.target.checked = !is_active; showToast(error.message || 'Failed to update ad.', 'error'); return; }
+  await loadAllAds();
+  await loadAdsForAdmin();
+});
+
+$('#ad-manage-list').addEventListener('click', async (e) => {
+  const btn = e.target.closest('.ad-delete-btn');
+  if (!btn) return;
+  const row = btn.closest('.ad-manage-row');
+  const adId = row.dataset.adId;
+  if (!confirm('Delete this ad permanently? This also removes its uploaded file.')) return;
+  const { data: adRow } = await supabaseClient.from('ads').select('media_url').eq('id', adId).maybeSingle();
+  const { error } = await supabaseClient.from('ads').delete().eq('id', adId);
+  if (error) { showToast(error.message || 'Failed to delete ad.', 'error'); return; }
+  if (adRow?.media_url) {
+    const path = adRow.media_url.split('/ads-media/')[1];
+    if (path) await supabaseClient.storage.from('ads-media').remove([path]).catch(() => {});
+  }
+  await loadAdsForAdmin();
+  await loadAllAds();
+  showToast('Ad deleted.');
+});
+
+$('#ad-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const title = $('#ad-title').value.trim();
+  const placement = $('#ad-placement').value;
+  const link_url = $('#ad-link').value.trim() || null;
+  const is_active = $('#ad-active-toggle').checked;
+  const file = $('#ad-file').files[0];
+  if (!file) { setFormMsg('#ad-form-msg', 'Please choose an image or video file.', 'error'); return; }
+  const media_type = file.type.startsWith('video/') ? 'video' : 'image';
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  setFormMsg('#ad-form-msg', 'Uploading…', 'info');
+  try {
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const path = `${state.user.id}/${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabaseClient.storage.from('ads-media').upload(path, file, { upsert: false });
+    if (uploadError) throw uploadError;
+    const { data: pub } = supabaseClient.storage.from('ads-media').getPublicUrl(path);
+
+    const { error: insertError } = await supabaseClient.from('ads').insert({
+      title, media_type, media_url: pub.publicUrl, link_url, placement, is_active, created_by: state.user.id
+    });
+    if (insertError) throw insertError;
+
+    setFormMsg('#ad-form-msg', 'Ad published.', 'info');
+    e.target.reset();
+    $('#ad-active-toggle').checked = true;
+    await loadAdsForAdmin();
+    await loadAllAds();
+  } catch (err) {
+    setFormMsg('#ad-form-msg', err.message || 'Failed to publish ad. Make sure the "ads-media" storage bucket exists (see SETUP_INSTRUCTIONS.md).', 'error');
+  } finally {
+    submitBtn.disabled = false;
+  }
 });
 
 /* ============================================================
@@ -2000,7 +2233,7 @@ function stopHealthCheck(){ if (state.healthCheckTimer) { clearInterval(state.he
 /* ============================================================
    14. DRAWER (roster + settings panel)
    ============================================================ */
-function openDrawer(){ renderOwnerSettingsPanel(); renderMySharingToggle(); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
+function openDrawer(){ renderOwnerSettingsPanel(); renderMySharingToggle(); renderAdBanner('app_screen', 'ad-banner-app'); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
 function closeDrawer(){ $('#drawer').classList.remove('open'); $('#drawer-backdrop').classList.remove('open'); }
 $('#roster-btn').addEventListener('click', openDrawer);
 $('#drawer-close').addEventListener('click', closeDrawer);
@@ -2146,3 +2379,4 @@ document.addEventListener('visibilitychange', () => {
 </script>
 </body>
 </html>
+k
