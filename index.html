@@ -133,6 +133,8 @@ button{ cursor:pointer; }
 .msg.info{ background:rgba(45,212,191,.1); color:var(--accent-2); border:1px solid rgba(45,212,191,.28); }
 
 .divider-or{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--muted); font-size:12px; }
+.link-btn{ background:none; border:none; padding:4px; color:var(--accent-2); font-size:12.5px; font-weight:600; cursor:pointer; }
+.link-btn:hover{ text-decoration:underline; }
 .divider-or::before, .divider-or::after{ content:""; flex:1; height:1px; background:var(--line); }
 
 .top-actions{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
@@ -305,6 +307,7 @@ button{ cursor:pointer; }
   display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text);
 }
 #recenter-btn{ right:12px; bottom:calc(env(safe-area-inset-bottom,0px) + 128px); }
+#recenter-btn.following{ border-color:var(--accent-2); color:var(--accent-2); box-shadow:0 0 0 3px rgba(45,212,191,.18), var(--shadow); }
 
 /* PTT Beacon Button */
 #ptt-wrap{
@@ -402,6 +405,7 @@ button{ cursor:pointer; }
         <input id="login-password" type="password" autocomplete="current-password" required minlength="6" />
       </div>
       <button class="btn btn-primary" type="submit">Log in</button>
+      <button type="button" id="forgot-password-link" class="link-btn" style="display:block; margin:12px auto 0; text-align:center;">Forgot password?</button>
     </form>
 
     <form id="signup-form" class="hidden">
@@ -439,6 +443,29 @@ button{ cursor:pointer; }
         <input id="signup-password" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters" />
       </div>
       <button class="btn btn-primary" type="submit">Create account</button>
+    </form>
+
+    <form id="forgot-form" class="hidden">
+      <div class="field-hint" style="margin-bottom:14px;">Enter your account email — we'll send you a link to reset your password.</div>
+      <div class="field">
+        <label for="forgot-email">Email</label>
+        <input id="forgot-email" type="email" autocomplete="email" required />
+      </div>
+      <button class="btn btn-primary" type="submit">Send reset link</button>
+      <button type="button" id="forgot-cancel-btn" class="btn btn-ghost" style="margin-top:8px;">Back to log in</button>
+    </form>
+
+    <form id="reset-password-form" class="hidden">
+      <div class="field-hint" style="margin-bottom:14px;">Choose a new password for your account.</div>
+      <div class="field">
+        <label for="reset-password">New password</label>
+        <input id="reset-password" type="password" autocomplete="new-password" required minlength="6" placeholder="At least 6 characters" />
+      </div>
+      <div class="field">
+        <label for="reset-password-confirm">Confirm new password</label>
+        <input id="reset-password-confirm" type="password" autocomplete="new-password" required minlength="6" />
+      </div>
+      <button class="btn btn-primary" type="submit">Set new password</button>
     </form>
 
     <div id="auth-msg" class="msg"></div>
@@ -735,16 +762,24 @@ button{ cursor:pointer; }
    >>> PASTE YOUR SUPABASE CREDENTIALS HERE <<<
    Get these from: Supabase Dashboard -> Project Settings -> API
    ============================================================ */
-const SUPABASE_URL = 'https://jbgusipoxybfzzfgikfg.supabase.co';         // e.g. 'https://xxxxxxxxxxxx.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3U'; // the "anon public" key
+const SUPABASE_URL = 'https://jbgusipoxybfzzfgikfg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3U';
 
 const LOCATION_MIN_INTERVAL_MS = 3000;
 const LOCATION_LOW_BATTERY_INTERVAL_MS = 6000;
 const LOCATION_BACKGROUND_INTERVAL_MS = 10000;
 const STALE_OFFLINE_MS = 30000;
 const HEARTBEAT_MS = 15000;
+// STUN alone works for most home/office/mobile-data networks, but some
+// carrier-grade or symmetric NATs can never establish a direct peer-to-peer
+// connection without a TURN (relay) server — this is the single most common
+// real-world cause of "I can't hear anyone" even though everything else
+// works. If that happens for some of your users, add a TURN server below
+// (e.g. from Twilio, Cloudflare, Metered, or a self-hosted coturn):
+//   { urls: 'turn:your-turn-host:3478', username: '...', credential: '...' }
 const ICE_SERVERS = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }
+  // , { urls: 'turn:your-turn-host:3478', username: 'YOUR_TURN_USERNAME', credential: 'YOUR_TURN_CREDENTIAL' }
 ];
 
 /* ============================================================
@@ -759,9 +794,27 @@ $all('[data-auth-tab]').forEach(btn => btn.addEventListener('click', () => {
   const tab = btn.dataset.authTab;
   $('#login-form').classList.toggle('hidden', tab !== 'login');
   $('#signup-form').classList.toggle('hidden', tab !== 'signup');
+  $('#forgot-form').classList.add('hidden');
+  $('#reset-password-form').classList.add('hidden');
+  $('.tabs').classList.remove('hidden');
   const msg = $('#auth-msg');
   if (!msg.dataset.persist) { msg.textContent = ''; msg.classList.remove('show'); }
 }));
+
+$('#forgot-password-link').addEventListener('click', () => {
+  $('.tabs').classList.add('hidden');
+  $('#login-form').classList.add('hidden');
+  $('#signup-form').classList.add('hidden');
+  $('#reset-password-form').classList.add('hidden');
+  $('#forgot-form').classList.remove('hidden');
+  $('#forgot-email').value = $('#login-email').value || '';
+  setFormMsg('#auth-msg', '');
+});
+$('#forgot-cancel-btn').addEventListener('click', () => {
+  $('#forgot-form').classList.add('hidden');
+  $('.tabs').classList.remove('hidden');
+  $('[data-auth-tab="login"]').click();
+});
 
 $all('[data-convoy-tab]').forEach(btn => btn.addEventListener('click', () => {
   $all('[data-convoy-tab]').forEach(b => b.classList.remove('active'));
@@ -812,11 +865,13 @@ const state = {
   watchId: null,
   channel: null,
   peers: new Map(),
+  peerRetryCounts: new Map(),
   localStream: null,
   micRequested: false,
   micDenied: false,
   talking: new Set(),
   myLocation: null,
+  followMe: true,
   lastCoords: null,
   lastCoordsTime: null,
   lastSentAt: 0,
@@ -1017,6 +1072,40 @@ $('#signout-btn').addEventListener('click', async () => {
   location.reload();
 });
 
+$('#forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (!requireSupabase('#auth-msg')) return;
+  const email = $('#forgot-email').value.trim();
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  setFormMsg('#auth-msg', '');
+  // redirectTo must be added to this Supabase project's Auth ->
+  // URL Configuration -> Redirect URLs allow-list, or the emailed
+  // link will be rejected. See SETUP_INSTRUCTIONS.md.
+  const redirectTo = window.location.origin + window.location.pathname;
+  const { error } = await supabaseClient.auth.resetPasswordForEmail(email, { redirectTo });
+  submitBtn.disabled = false;
+  if (error) { setFormMsg('#auth-msg', error.message || 'Could not send reset email.', 'error'); return; }
+  setFormMsg('#auth-msg', `If an account exists for ${email}, a password reset link has been sent. Check your inbox (and spam folder).`, 'info');
+});
+
+$('#reset-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const pw = $('#reset-password').value;
+  const pwConfirm = $('#reset-password-confirm').value;
+  if (pw !== pwConfirm) { setFormMsg('#auth-msg', 'Passwords do not match.', 'error'); return; }
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  setFormMsg('#auth-msg', '');
+  const { error } = await supabaseClient.auth.updateUser({ password: pw });
+  submitBtn.disabled = false;
+  if (error) { setFormMsg('#auth-msg', error.message || 'Could not update password.', 'error'); return; }
+  showToast('Password updated.');
+  $('#reset-password-form').classList.add('hidden');
+  $('.tabs').classList.remove('hidden');
+  await afterAuthSuccess();
+});
+
 // Creates the profile row on first login/signup only — deliberately never
 // overwrites an existing profile (so a login's fallback values can't clobber
 // a username or other fields the person has since customized).
@@ -1077,6 +1166,15 @@ async function afterAuthSuccess(opts){
 
 supabaseClient?.auth.onAuthStateChange((event) => {
   if (event === 'SIGNED_OUT') showScreen('auth');
+  if (event === 'PASSWORD_RECOVERY') {
+    showScreen('auth');
+    $('.tabs').classList.add('hidden');
+    $('#login-form').classList.add('hidden');
+    $('#signup-form').classList.add('hidden');
+    $('#forgot-form').classList.add('hidden');
+    $('#reset-password-form').classList.remove('hidden');
+    setFormMsg('#auth-msg', '');
+  }
 });
 
 /* ============================================================
@@ -1267,6 +1365,10 @@ async function enterConvoy(convoyStub){
     if (!freshConvoy) throw new Error('This convoy no longer exists.');
 
     state.convoy = freshConvoy;
+    state.followMe = true;          // fresh session: default to auto-centering on me
+    state.lastSentAt = 0;           // don't let a stale throttle timestamp delay the first position update
+    state.lastCoords = null;
+    state.lastCoordsTime = null;
     if (!state.map) initMap();
     await loadInitialMembersAndLocations();
 
@@ -1274,6 +1376,14 @@ async function enterConvoy(convoyStub){
     $('#app-convoy-name').textContent = freshConvoy.name;
     $('#app-convoy-code').textContent = `CODE ${freshConvoy.code}`;
     showScreen('app');
+
+    // The map container was `display:none` until the line above, so Leaflet
+    // may have measured it as 0x0 at init time — force a remeasure now that
+    // it's actually visible. This is what fixes a grey / blank / mis-sized
+    // map on entering a convoy (and again after coming back from "Back").
+    state.map.invalidateSize();
+    setTimeout(() => state.map.invalidateSize(), 300);
+    updateRecenterButtonUI();
 
     subscribeRealtime();
     startHeartbeat();
@@ -1804,6 +1914,7 @@ function markOnline(userId, online){
     if (entry) { clearReconnectTimer(entry); entry.pc.close(); state.peers.delete(userId); }
     const audioEl = document.getElementById('audio-' + userId);
     if (audioEl) audioEl.remove();
+    state.peerRetryCounts.delete(userId);
   }
   renderMemberList();
   refreshAllMarkers();
@@ -1995,7 +2106,7 @@ function getOrCreatePeer(peerId){
 
   pc.oniceconnectionstatechange = () => {
     const s = pc.iceConnectionState;
-    if (s === 'connected' || s === 'completed') clearReconnectTimer(entry);
+    if (s === 'connected' || s === 'completed') { clearReconnectTimer(entry); state.peerRetryCounts.delete(peerId); }
     else if (s === 'failed') { try { pc.restartIce(); } catch (e) {} scheduleConnectionHealthCheck(peerId, 1500); }
     else if (s === 'disconnected') scheduleConnectionHealthCheck(peerId, 6000);
   };
@@ -2027,6 +2138,12 @@ function recreatePeerConnection(peerId){
   if (entry) { clearReconnectTimer(entry); entry.pc.close(); state.peers.delete(peerId); }
   const audioEl = document.getElementById('audio-' + peerId);
   if (audioEl) audioEl.remove();
+  const attempts = (state.peerRetryCounts.get(peerId) || 0) + 1;
+  state.peerRetryCounts.set(peerId, attempts);
+  if (attempts === 3) {
+    const name = state.members.get(peerId)?.display_name || 'a member';
+    showToast(`Voice to ${name} keeps failing to connect — this usually means your network needs a TURN server (see SETUP_INSTRUCTIONS.md).`, 'error');
+  }
   maybeInitiatePeerConnection(peerId, true);
 }
 
@@ -2096,6 +2213,7 @@ function closeAllPeers(){
   resetAllPeerConnections();
   if (state.localStream) { state.localStream.getTracks().forEach(t => t.stop()); state.localStream = null; }
   state.micRequested = false;
+  state.peerRetryCounts.clear();
 }
 
 function checkMicHealth(){
@@ -2202,10 +2320,21 @@ function handlePttEnd(){
   toggleOpenMicMute();
 }
 const pttBtn = $('#ptt-btn');
-pttBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); handlePttStart(); });
-pttBtn.addEventListener('pointerup', (e) => { e.preventDefault(); handlePttEnd(); });
+pttBtn.addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  try { pttBtn.setPointerCapture(e.pointerId); } catch (err) { /* not supported in this browser, harmless */ }
+  handlePttStart();
+});
+pttBtn.addEventListener('pointerup', (e) => {
+  e.preventDefault();
+  try { pttBtn.releasePointerCapture(e.pointerId); } catch (err) {}
+  handlePttEnd();
+});
 pttBtn.addEventListener('pointercancel', () => { handlePttEnd(); });
-pttBtn.addEventListener('pointerleave', () => { if (state.convoy?.ptt_enabled) stopTalking(); });
+// With the pointer captured, pointerleave no longer fires just because a
+// finger drifted slightly off the button — this only fires now if capture
+// itself is lost (e.g. an interrupting touch), so it's still a safe fallback.
+pttBtn.addEventListener('lostpointercapture', () => { if (state.convoy?.ptt_enabled) stopTalking(); });
 document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !isTypingTarget(e.target)) { e.preventDefault(); handlePttStart(); } });
 document.addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); if (state.convoy?.ptt_enabled) stopTalking(); } });
 function isTypingTarget(el){ return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'; }
@@ -2307,11 +2436,39 @@ function hideBanner(){ $('#gps-banner').classList.add('hidden'); }
    ============================================================ */
 function initMap(){
   state.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([20, 0], 3);
-  L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+  L.control.zoom({ position: 'topright' }).addTo(state.map);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
   }).addTo(state.map);
+
+  // Auto-follow ("keep me centered while moving"): any manual drag or zoom
+  // from the user turns it off; the recenter button turns it back on. Moves
+  // WE trigger programmatically (auto-follow itself, or the recenter button)
+  // must not be mistaken for the user "looking around", so they're wrapped
+  // in withProgrammaticMapMove() which briefly suppresses these listeners.
+  state.map.on('dragstart', () => {
+    if (state._suppressFollowBreak) return;
+    if (state.followMe) { state.followMe = false; updateRecenterButtonUI(); }
+  });
+  state.map.on('zoomstart', () => {
+    if (state._suppressFollowBreak) return;
+    if (state.followMe) { state.followMe = false; updateRecenterButtonUI(); }
+  });
+}
+
+// Wrap any map move/zoom WE trigger in code so the drag/zoom listeners
+// above don't misread it as the user manually panning away.
+function withProgrammaticMapMove(fn){
+  state._suppressFollowBreak = true;
+  fn();
+  clearTimeout(state._suppressFollowBreakTimer);
+  state._suppressFollowBreakTimer = setTimeout(() => { state._suppressFollowBreak = false; }, 400);
+}
+
+function updateRecenterButtonUI(){
+  $('#recenter-btn').classList.toggle('following', !!state.followMe);
+  $('#recenter-btn').title = state.followMe ? 'Following you — tap to stop' : 'Center on me';
 }
 
 function markerHtml(userId, loc){
@@ -2346,15 +2503,23 @@ function upsertMemberMarker(userId, loc){
   state.locations.set(userId, loc);
   let marker = state.markers.get(userId);
   const icon = L.divIcon({ html: markerHtml(userId, loc), className: '', iconSize: [40, 50], iconAnchor: [20, 12], popupAnchor: [0, -12] });
+  const isMe = userId === state.user.id;
   if (!marker) {
     marker = L.marker([loc.lat, loc.lng], { icon }).addTo(state.map);
     state.markers.set(userId, marker);
-    if (state.markers.size === 1) state.map.setView([loc.lat, loc.lng], 15);
+    if (state.markers.size === 1) withProgrammaticMapMove(() => state.map.setView([loc.lat, loc.lng], 15));
   } else {
     marker.setLatLng([loc.lat, loc.lng]);
     marker.setIcon(icon);
   }
   marker.bindPopup(popupHtml(userId, loc));
+
+  // Keep the user centered while they're moving, unless they've manually
+  // panned/zoomed away (see initMap's dragstart/zoomstart listeners) or
+  // tapped away from the recenter button's "following" state.
+  if (isMe && state.followMe) {
+    withProgrammaticMapMove(() => state.map.panTo([loc.lat, loc.lng], { animate: true, duration: 0.5 }));
+  }
 }
 function refreshAllMarkers(){ state.locations.forEach((loc, userId) => upsertMemberMarker(userId, loc)); }
 function removeMarker(userId){
@@ -2366,8 +2531,13 @@ function clearMapMarkers(){ state.markers.forEach(m => state.map.removeLayer(m))
 function distanceFromMe(loc){ if (!state.myLocation) return null; return haversineMeters(state.myLocation.lat, state.myLocation.lng, loc.lat, loc.lng); }
 
 $('#recenter-btn').addEventListener('click', () => {
-  if (state.myLocation) state.map.flyTo([state.myLocation.lat, state.myLocation.lng], Math.max(state.map.getZoom(), 15));
-  else showToast('Your location is not available yet.');
+  state.followMe = true;
+  updateRecenterButtonUI();
+  if (state.myLocation) {
+    withProgrammaticMapMove(() => state.map.flyTo([state.myLocation.lat, state.myLocation.lng], Math.max(state.map.getZoom(), 15)));
+  } else {
+    showToast('Your location is not available yet.');
+  }
 });
 
 /* ============================================================
@@ -2479,8 +2649,11 @@ function focusOnMember(userId){
   const loc = state.locations.get(userId);
   if (!loc) { showToast('No location to show for this member.'); return; }
   closeDrawer();
+  const isMe = userId === state.user.id;
+  state.followMe = isMe;
+  updateRecenterButtonUI();
   const targetZoom = Math.max(state.map.getZoom(), 16);
-  state.map.flyTo([loc.lat, loc.lng], targetZoom, { duration: 0.6 });
+  withProgrammaticMapMove(() => state.map.flyTo([loc.lat, loc.lng], targetZoom, { duration: 0.6 }));
   const marker = state.markers.get(userId);
   if (marker) marker.openPopup();
 }
@@ -2609,6 +2782,13 @@ document.addEventListener('visibilitychange', () => {
     showScreen('auth');
     return;
   }
+  // If we've arrived via a password-reset email link, let the
+  // PASSWORD_RECOVERY auth event (registered above) show the reset-password
+  // form instead of auto-navigating into the app as if this were a normal
+  // login — otherwise this session check would race ahead of that event.
+  const isPasswordRecoveryLink = window.location.hash.includes('type=recovery');
+  if (isPasswordRecoveryLink) { showScreen('auth'); return; }
+
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
     state.session = session;
