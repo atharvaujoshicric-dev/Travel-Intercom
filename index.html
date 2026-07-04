@@ -213,6 +213,13 @@ button{ cursor:pointer; }
 }
 .spacer{ flex:1; }
 
+.top-overlay-stack{
+  position:absolute; top:calc(env(safe-area-inset-top,0px) + 62px); left:12px; right:12px; z-index:485;
+  display:flex; flex-direction:column; gap:8px;
+}
+.top-overlay-stack #gps-banner{ position:static; top:auto; left:auto; right:auto; }
+.top-overlay-stack .ad-banner{ margin-bottom:0; }
+
 .banner{
   position:absolute; top:calc(env(safe-area-inset-top,0px) + 62px); left:12px; right:12px; z-index:490;
   background:rgba(255,84,112,.14); border:1px solid rgba(255,84,112,.35); color:#ffb3c1;
@@ -604,6 +611,7 @@ button{ cursor:pointer; }
   <div id="map"></div>
 
   <div class="topbar">
+    <button id="back-to-convoys-btn" class="icon-btn" title="Back to My Convoys">←</button>
     <div class="topbar-info">
       <span id="conn-dot" class="beacon-dot"></span>
       <div>
@@ -617,7 +625,10 @@ button{ cursor:pointer; }
     <button id="roster-btn" class="icon-btn" title="Members &amp; settings">☰</button>
   </div>
 
-  <div id="gps-banner" class="banner hidden"></div>
+  <div class="top-overlay-stack">
+    <div id="ad-banner-app" class="ad-banner ad-banner-compact hidden"></div>
+    <div id="gps-banner" class="banner hidden"></div>
+  </div>
 
   <div id="talking-strip"></div>
 
@@ -688,11 +699,6 @@ button{ cursor:pointer; }
           </div>
         </div>
         <div id="owner-settings-msg" class="msg"></div>
-      </div>
-
-      <div class="drawer-section">
-        <h3>Sponsored</h3>
-        <div id="ad-banner-app" class="ad-banner ad-banner-compact hidden"></div>
       </div>
     </div>
     <div class="drawer-foot">
@@ -790,6 +796,7 @@ const state = {
   peers: new Map(),
   localStream: null,
   micRequested: false,
+  micDenied: false,
   talking: new Set(),
   myLocation: null,
   lastCoords: null,
@@ -1030,7 +1037,7 @@ $('#my-convoys-list').addEventListener('click', (e) => {
   const row = e.target.closest('.convoy-row');
   if (!row) return;
   const convoy = state.myConvoys.find(c => c.id === row.dataset.convoyId);
-  if (convoy) enterConvoy(convoy);
+  if (convoy) { primePermissions(); enterConvoy(convoy); }
 });
 
 $('#create-form').addEventListener('submit', async (e) => {
@@ -1100,25 +1107,40 @@ $('#join-form').addEventListener('submit', async (e) => {
   }
 });
 
-async function enterConvoy(convoy){
-  state.convoy = convoy;
-  localStorage.setItem('convoy_intercom_active_convoy_id', convoy.id);
+async function enterConvoy(convoyStub){
+  try {
+    // Always re-fetch fresh (not the possibly-stale object from a list/cache) so
+    // ptt_enabled/voice_muted/name/code are correct even after being away a while.
+    const { data: freshConvoy, error: convoyErr } = await supabaseClient
+      .from('convoys').select('*').eq('id', convoyStub.id).maybeSingle();
+    if (convoyErr) throw convoyErr;
+    if (!freshConvoy) throw new Error('This convoy no longer exists.');
 
-  $('#app-convoy-name').textContent = convoy.name;
-  $('#app-convoy-code').textContent = `CODE ${convoy.code}`;
-  showScreen('app');
+    state.convoy = freshConvoy;
+    if (!state.map) initMap();
+    await loadInitialMembersAndLocations();
 
-  if (!state.map) initMap();
+    localStorage.setItem('convoy_intercom_active_convoy_id', freshConvoy.id);
+    $('#app-convoy-name').textContent = freshConvoy.name;
+    $('#app-convoy-code').textContent = `CODE ${freshConvoy.code}`;
+    showScreen('app');
 
-  await loadInitialMembersAndLocations();
-  subscribeRealtime();
-  startHeartbeat();
-  startTicker();
-  startHealthCheck();
-  requestGeolocationAndStart();
-  await onVoiceSettingsChanged();
-  renderOwnerSettingsPanel();
-  renderMySharingToggle();
+    subscribeRealtime();
+    startHeartbeat();
+    startTicker();
+    startHealthCheck();
+    requestGeolocationAndStart();
+    await onVoiceSettingsChanged();
+    renderOwnerSettingsPanel();
+    renderMySharingToggle();
+    renderAdBanner('app_screen', 'ad-banner-app');
+  } catch (err) {
+    console.error('enterConvoy failed', err);
+    state.convoy = null;
+    localStorage.removeItem('convoy_intercom_active_convoy_id');
+    showToast(err.message || 'Failed to open this convoy.', 'error');
+    await showConvoysScreen();
+  }
 }
 
 async function loadInitialMembersAndLocations(){
@@ -1198,6 +1220,27 @@ async function exitToConvoysScreen(){
   closeDrawer();
   await showConvoysScreen();
 }
+
+// Non-destructive "back" — unlike Leave, this keeps your convoy_members
+// row intact so the group still appears in "My Convoys" and you can
+// re-enter any time. Only your live location row is cleared, so your
+// marker doesn't linger on other members' maps while you're not here.
+async function exitConvoySession(){
+  if (!state.convoy) { await showConvoysScreen(); return; }
+  const convoyId = state.convoy.id;
+  stopTalking();
+  closeAllPeers();
+  stopLocationTracking();
+  stopHeartbeat();
+  stopTicker();
+  stopHealthCheck();
+  if (state.channel) { await supabaseClient.removeChannel(state.channel); state.channel = null; }
+  try {
+    await supabaseClient.from('locations').delete().eq('convoy_id', convoyId).eq('user_id', state.user.id);
+  } catch (err) { console.warn('failed to clear location on exit', err); }
+  await exitToConvoysScreen();
+}
+$('#back-to-convoys-btn').addEventListener('click', exitConvoySession);
 
 async function handleBeingRemovedFromConvoy(){
   showToast('You were removed from this convoy.', 'error');
@@ -1689,7 +1732,8 @@ function renderTalkingStrip(){
    9. WEBRTC — mesh voice (push-to-talk / open mic)
    ============================================================ */
 async function ensureMicAccess(){
-  if (state.localStream || state.micRequested) return state.localStream != null;
+  if (state.localStream) return true;
+  if (state.micRequested) return false;
   state.micRequested = true;
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -1700,12 +1744,15 @@ async function ensureMicAccess(){
       t.addEventListener('ended', handleMicTrackEnded);
     });
     state.localStream = stream;
+    state.micDenied = false;
     attachLocalStreamToAllPeers();
+    applyVoiceModeUI();
     return true;
   } catch (err) {
     state.micRequested = false;
-    $('#ptt-btn').classList.add('disabled');
+    state.micDenied = true;
     showToast('Microphone permission is required for voice. Enable it in your browser settings.', 'error');
+    applyVoiceModeUI();
     return false;
   }
 }
@@ -1717,9 +1764,7 @@ function handleMicTrackEnded(){
   state.localStream = null;
   state.micRequested = false;
   pttActive = false;
-  openMicMuted = true;
-  $('#ptt-btn').classList.remove('active');
-  ensureMicAccess();
+  ensureMicAccess().then(ok => { if (ok) onVoiceSettingsChanged(); else applyVoiceModeUI(); });
 }
 
 function attachLocalStreamToAllPeers(){
@@ -1881,7 +1926,7 @@ function checkMicHealth(){
     state.localStream.getTracks().forEach(t => t.stop());
     state.localStream = null;
     state.micRequested = false;
-    ensureMicAccess();
+    ensureMicAccess().then(ok => { if (ok) onVoiceSettingsChanged(); });
   }
 }
 function checkPeerHealth(){
@@ -1906,9 +1951,14 @@ async function onVoiceSettingsChanged(){
     if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
     broadcastTalking(false);
   } else if (!state.convoy.ptt_enabled) {
-    openMicMuted = false;
     const ok = await ensureMicAccess();
-    if (ok) { state.localStream.getAudioTracks().forEach(t => { t.enabled = true; }); broadcastTalking(true); }
+    if (ok) {
+      openMicMuted = false;
+      state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
+      broadcastTalking(true);
+    } else {
+      openMicMuted = true; // no mic available — nothing to unmute yet
+    }
   } else {
     pttActive = false; openMicMuted = true;
     if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
@@ -1925,6 +1975,9 @@ function applyVoiceModeUI(){
   if (state.convoy.voice_muted) {
     btn.classList.add('disabled', 'muted-mode');
     hint.textContent = 'VOICE SILENCED BY CONVOY OWNER';
+  } else if (state.micDenied && !state.localStream) {
+    btn.classList.add('disabled');
+    hint.textContent = 'MICROPHONE UNAVAILABLE — CHECK BROWSER PERMISSIONS';
   } else if (state.convoy.ptt_enabled) {
     hint.textContent = pttActive ? 'RELEASE TO STOP' : 'HOLD TO TALK';
     if (pttActive) btn.classList.add('active');
@@ -1937,7 +1990,7 @@ function applyVoiceModeUI(){
 async function startTalking(){
   if (pttActive) return;
   const ok = await ensureMicAccess();
-  if (!ok) return;
+  if (!ok) { applyVoiceModeUI(); return; }
   pttActive = true;
   state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
   broadcastTalking(true);
@@ -1952,7 +2005,7 @@ function stopTalking(){
 }
 async function toggleOpenMicMute(){
   const ok = await ensureMicAccess();
-  if (!ok) return;
+  if (!ok) { applyVoiceModeUI(); return; }
   openMicMuted = !openMicMuted;
   const enabled = !openMicMuted;
   state.localStream.getAudioTracks().forEach(t => { t.enabled = enabled; });
@@ -2233,7 +2286,7 @@ function stopHealthCheck(){ if (state.healthCheckTimer) { clearInterval(state.he
 /* ============================================================
    14. DRAWER (roster + settings panel)
    ============================================================ */
-function openDrawer(){ renderOwnerSettingsPanel(); renderMySharingToggle(); renderAdBanner('app_screen', 'ad-banner-app'); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
+function openDrawer(){ renderOwnerSettingsPanel(); renderMySharingToggle(); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
 function closeDrawer(){ $('#drawer').classList.remove('open'); $('#drawer-backdrop').classList.remove('open'); }
 $('#roster-btn').addEventListener('click', openDrawer);
 $('#drawer-close').addEventListener('click', closeDrawer);
@@ -2379,4 +2432,3 @@ document.addEventListener('visibilitychange', () => {
 </script>
 </body>
 </html>
-k
