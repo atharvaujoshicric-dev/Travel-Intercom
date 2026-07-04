@@ -2021,30 +2021,40 @@ function renderTalkingStrip(){
 /* ============================================================
    9. WEBRTC — mesh voice (push-to-talk / open mic)
    ============================================================ */
+let micAccessPromise = null;
 async function ensureMicAccess(){
   if (state.localStream) return true;
-  if (state.micRequested) return false;
-  state.micRequested = true;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
-    stream.getAudioTracks().forEach(t => {
-      t.enabled = false;
-      t.addEventListener('ended', handleMicTrackEnded);
-    });
-    state.localStream = stream;
-    state.micDenied = false;
-    attachLocalStreamToAllPeers();
-    applyVoiceModeUI();
-    return true;
-  } catch (err) {
-    state.micRequested = false;
-    state.micDenied = true;
-    showToast('Microphone permission is required for voice. Enable it in your browser settings.', 'error');
-    applyVoiceModeUI();
-    return false;
-  }
+  // A request is already in flight (very common: primePermissions() and
+  // onVoiceSettingsChanged() both call this within moments of entering a
+  // convoy) — share its result instead of a second caller wrongly assuming
+  // "unavailable" just because it wasn't the one that started the request.
+  if (micAccessPromise) return micAccessPromise;
+  micAccessPromise = (async () => {
+    state.micRequested = true;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+      });
+      stream.getAudioTracks().forEach(t => {
+        t.enabled = false;
+        t.addEventListener('ended', handleMicTrackEnded);
+      });
+      state.localStream = stream;
+      state.micDenied = false;
+      attachLocalStreamToAllPeers();
+      applyVoiceModeUI();
+      return true;
+    } catch (err) {
+      state.micRequested = false;
+      state.micDenied = true;
+      showToast('Microphone permission is required for voice. Enable it in your browser settings.', 'error');
+      applyVoiceModeUI();
+      return false;
+    } finally {
+      micAccessPromise = null;
+    }
+  })();
+  return micAccessPromise;
 }
 
 function handleMicTrackEnded(){
@@ -2214,6 +2224,7 @@ function closeAllPeers(){
   if (state.localStream) { state.localStream.getTracks().forEach(t => t.stop()); state.localStream = null; }
   state.micRequested = false;
   state.peerRetryCounts.clear();
+  micAccessPromise = null;
 }
 
 function checkMicHealth(){
@@ -2243,12 +2254,17 @@ let openMicMuted = true;
 
 async function onVoiceSettingsChanged(){
   if (!state.convoy) return;
+  // Acquire (or reuse) the mic stream up front no matter which mode we're
+  // in. This means every peer connection gets its audio track attached
+  // from the very first offer, instead of depending on a renegotiation
+  // round-trip later when PTT is first pressed — renegotiation works, but
+  // it's a second point of failure this avoids entirely.
+  const ok = await ensureMicAccess();
   if (state.convoy.voice_muted) {
     pttActive = false; openMicMuted = true;
     if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
     broadcastTalking(false);
   } else if (!state.convoy.ptt_enabled) {
-    const ok = await ensureMicAccess();
     if (ok) {
       openMicMuted = false;
       state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
