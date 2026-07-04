@@ -23,8 +23,6 @@
 <style>
 /* ============================================================
    DESIGN TOKENS — "Night Convoy" theme
-   Asphalt-dark base, amber beacon accent (CB/hazard signaling),
-   teal GPS-lock accent, monospace telemetry for data readouts.
    ============================================================ */
 :root{
   --bg:#0b0e11;
@@ -33,9 +31,9 @@
   --line:#232936;
   --text:#e8ecf1;
   --muted:#8a94a6;
-  --accent:#ff9f1c;        /* beacon amber */
+  --accent:#ff9f1c;
   --accent-dim:#8a5a12;
-  --accent-2:#2dd4bf;      /* GPS-lock teal */
+  --accent-2:#2dd4bf;
   --danger:#ff5470;
   --online:#2dd4bf;
   --offline:#5b6472;
@@ -64,49 +62,34 @@ html[data-theme="light"]{
 *{box-sizing:border-box;}
 html,body{height:100%;}
 body{
-  margin:0;
-  background:var(--bg);
-  color:var(--text);
-  font-family:var(--font-ui);
-  overflow:hidden;
-  -webkit-tap-highlight-color:transparent;
+  margin:0; background:var(--bg); color:var(--text); font-family:var(--font-ui);
+  overflow:hidden; -webkit-tap-highlight-color:transparent;
 }
-button, input{ font-family:inherit; }
+button, input, select{ font-family:inherit; }
 button{ cursor:pointer; }
 :focus-visible{ outline:2px solid var(--accent-2); outline-offset:2px; }
-
 .hidden{ display:none !important; }
 
 /* ---------- Screens ---------- */
 .screen{
-  position:fixed; inset:0;
-  display:flex; align-items:center; justify-content:center;
-  padding:24px;
+  position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:24px;
   background:
     radial-gradient(circle at 20% 15%, rgba(255,159,28,.08), transparent 40%),
     radial-gradient(circle at 80% 85%, rgba(45,212,191,.07), transparent 45%),
     var(--bg);
+  overflow-y:auto;
 }
 .card{
-  width:100%; max-width:420px;
-  background:var(--bg-elev);
-  border:1px solid var(--line);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow);
-  padding:28px 26px 26px;
+  width:100%; max-width:440px; background:var(--bg-elev); border:1px solid var(--line);
+  border-radius:var(--radius); box-shadow:var(--shadow); padding:28px 26px 26px; margin:auto;
 }
-.brand{
-  display:flex; align-items:center; gap:10px; margin-bottom:22px;
-}
+.brand{ display:flex; align-items:center; gap:10px; margin-bottom:22px; }
 .brand-mark{
   width:34px; height:34px; border-radius:9px;
   background:conic-gradient(from 180deg, var(--accent), var(--accent-dim), var(--accent));
   position:relative; flex:none;
 }
-.brand-mark::after{
-  content:""; position:absolute; inset:9px; border-radius:50%;
-  background:var(--bg-elev);
-}
+.brand-mark::after{ content:""; position:absolute; inset:9px; border-radius:50%; background:var(--bg-elev); }
 .brand-title{ font-size:17px; font-weight:700; letter-spacing:.2px; }
 .brand-sub{ font-size:12px; color:var(--muted); font-family:var(--font-mono); }
 
@@ -120,23 +103,27 @@ button{ cursor:pointer; }
 
 .field{ margin-bottom:14px; }
 .field label{ display:block; font-size:12px; color:var(--muted); margin-bottom:6px; font-weight:600; letter-spacing:.3px; text-transform:uppercase; }
-.field input{
+.field input, .field select{
   width:100%; padding:11px 13px; background:var(--bg-elev-2); border:1px solid var(--line);
   border-radius:var(--radius-sm); color:var(--text); font-size:14px;
 }
-.field input:focus{ border-color:var(--accent-2); }
+.field input:focus, .field select:focus{ border-color:var(--accent-2); }
+.field-hint{ font-size:11px; color:var(--muted); margin-top:5px; }
 
 .btn{
   width:100%; padding:12px 14px; border-radius:var(--radius-sm); border:none;
   font-size:14px; font-weight:700; letter-spacing:.2px; transition:transform .1s, filter .15s;
 }
 .btn:active{ transform:scale(.98); }
+.btn:disabled{ opacity:.5; cursor:not-allowed; }
 .btn-primary{ background:var(--accent); color:#1a1200; }
 .btn-primary:hover{ filter:brightness(1.08); }
 .btn-ghost{ background:transparent; color:var(--text); border:1px solid var(--line); }
 .btn-ghost:hover{ border-color:var(--accent-2); }
 .btn-danger{ background:transparent; color:var(--danger); border:1px solid var(--danger); }
-.btn-row{ display:flex; gap:10px; }
+.btn-sm{ width:auto; padding:9px 14px; font-size:12.5px; }
+.btn-row{ display:flex; gap:8px; }
+.btn-row .field{ flex:1; margin-bottom:0; }
 
 .msg{ font-size:13px; margin-top:12px; padding:10px 12px; border-radius:var(--radius-sm); display:none; }
 .msg.show{ display:block; }
@@ -146,12 +133,42 @@ button{ cursor:pointer; }
 .divider-or{ display:flex; align-items:center; gap:10px; margin:18px 0; color:var(--muted); font-size:12px; }
 .divider-or::before, .divider-or::after{ content:""; flex:1; height:1px; background:var(--line); }
 
-.code-display{
-  font-family:var(--font-mono); font-size:26px; letter-spacing:6px; text-align:center;
-  padding:14px; background:var(--bg-elev-2); border:1px dashed var(--line); border-radius:var(--radius-sm);
-  margin:6px 0 16px; user-select:all;
+.top-actions{ display:flex; justify-content:flex-end; gap:8px; margin-bottom:10px; }
+
+/* ---------- My Convoys list ---------- */
+.convoy-list{ max-height:220px; overflow-y:auto; margin-bottom:18px; border:1px solid var(--line); border-radius:var(--radius-sm); }
+.convoy-list-empty{ padding:22px 14px; text-align:center; color:var(--muted); font-size:13px; }
+.convoy-row{
+  display:flex; align-items:center; gap:10px; padding:12px 14px; border-bottom:1px solid var(--line);
+  cursor:pointer; transition:background .12s;
 }
-.link-btn{ background:none; border:none; color:var(--accent-2); font-size:13px; padding:0; text-decoration:underline; }
+.convoy-row:last-child{ border-bottom:none; }
+.convoy-row:hover{ background:var(--bg-elev-2); }
+.convoy-row:active{ transform:scale(.99); }
+.convoy-row-main{ flex:1; min-width:0; }
+.convoy-row-name{ font-size:14px; font-weight:700; }
+.convoy-row-code{ font-family:var(--font-mono); font-size:11px; color:var(--muted); margin-top:2px; }
+.convoy-row-badge{
+  font-size:9.5px; font-weight:700; letter-spacing:.4px; padding:3px 7px; border-radius:5px; flex:none;
+  background:var(--bg-elev-2); color:var(--muted); border:1px solid var(--line);
+}
+.convoy-row-badge.owner{ color:var(--accent); border-color:var(--accent); }
+.section-label{ font-size:11px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+
+/* ---------- Switch toggle ---------- */
+.switch-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 0; }
+.switch-row-label{ font-size:13px; }
+.switch-row-sub{ font-size:11px; color:var(--muted); margin-top:1px; }
+.switch{ position:relative; display:inline-block; width:42px; height:24px; flex:none; }
+.switch input{ opacity:0; width:0; height:0; position:absolute; }
+.switch-slider{ position:absolute; inset:0; background:var(--line); border-radius:999px; transition:background .15s; cursor:pointer; }
+.switch-slider::before{
+  content:""; position:absolute; width:18px; height:18px; left:3px; top:3px;
+  background:#fff; border-radius:50%; transition:transform .15s;
+}
+.switch input:checked + .switch-slider{ background:var(--accent); }
+.switch input:checked + .switch-slider::before{ transform:translateX(18px); }
+.switch input:disabled + .switch-slider{ opacity:.4; cursor:not-allowed; }
 
 /* ---------- App screen ---------- */
 #app-screen{ position:fixed; inset:0; display:block; padding:0; background:var(--bg); }
@@ -166,21 +183,17 @@ button{ cursor:pointer; }
 }
 .topbar > *{ pointer-events:auto; }
 .topbar-info{
-  display:flex; align-items:center; gap:8px;
-  background:var(--bg-elev); border:1px solid var(--line); border-radius:999px;
-  padding:6px 14px 6px 6px; box-shadow:var(--shadow);
+  display:flex; align-items:center; gap:8px; background:var(--bg-elev); border:1px solid var(--line);
+  border-radius:999px; padding:6px 14px 6px 6px; box-shadow:var(--shadow);
 }
-.topbar-info .beacon-dot{
-  width:9px; height:9px; border-radius:50%; background:var(--online);
-  box-shadow:0 0 0 3px rgba(45,212,191,.2);
-}
+.topbar-info .beacon-dot{ width:9px; height:9px; border-radius:50%; background:var(--online); box-shadow:0 0 0 3px rgba(45,212,191,.2); }
 .topbar-info .beacon-dot.offline{ background:var(--offline); box-shadow:none; }
 .topbar-title{ font-size:13px; font-weight:700; }
 .topbar-code{ font-family:var(--font-mono); font-size:11px; color:var(--muted); }
 .icon-btn{
-  width:38px; height:38px; border-radius:50%; border:1px solid var(--line);
-  background:var(--bg-elev); color:var(--text); display:flex; align-items:center; justify-content:center;
-  font-size:16px; box-shadow:var(--shadow); flex:none;
+  width:38px; height:38px; border-radius:50%; border:1px solid var(--line); background:var(--bg-elev);
+  color:var(--text); display:flex; align-items:center; justify-content:center; font-size:16px;
+  box-shadow:var(--shadow); flex:none;
 }
 .spacer{ flex:1; }
 
@@ -191,13 +204,12 @@ button{ cursor:pointer; }
   backdrop-filter: blur(6px);
 }
 .banner.info{ background:rgba(45,212,191,.12); border-color:rgba(45,212,191,.3); color:#a9f2e8; }
+.banner.warn{ background:rgba(255,159,28,.14); border-color:rgba(255,159,28,.35); color:#ffd9a0; }
 
-/* Talking-now strip */
 #talking-strip{
   position:absolute; left:12px; right:12px; z-index:480;
   bottom:calc(env(safe-area-inset-bottom,0px) + 128px);
-  display:flex; gap:8px; flex-wrap:wrap; justify-content:center;
-  pointer-events:none;
+  display:flex; gap:8px; flex-wrap:wrap; justify-content:center; pointer-events:none;
 }
 .talk-chip{
   background:var(--bg-elev); border:1px solid var(--accent); color:var(--accent);
@@ -207,75 +219,77 @@ button{ cursor:pointer; }
 }
 @keyframes chipPulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,159,28,.35);} 50%{ box-shadow:0 0 0 6px rgba(255,159,28,0);} }
 
-/* Drawer (member roster) */
+/* Drawer (roster + settings) */
 #drawer-backdrop{
   position:absolute; inset:0; z-index:600; background:rgba(0,0,0,.45); opacity:0; pointer-events:none;
   transition:opacity .2s;
 }
 #drawer-backdrop.open{ opacity:1; pointer-events:auto; }
 #drawer{
-  position:absolute; top:0; right:0; bottom:0; z-index:610;
-  width:min(340px, 88vw);
+  position:absolute; top:0; right:0; bottom:0; z-index:610; width:min(360px, 90vw);
   background:var(--bg-elev); border-left:1px solid var(--line);
   transform:translateX(100%); transition:transform .25s ease;
-  display:flex; flex-direction:column;
-  padding-top:env(safe-area-inset-top,0px);
+  display:flex; flex-direction:column; padding-top:env(safe-area-inset-top,0px);
 }
 #drawer.open{ transform:translateX(0); }
 .drawer-head{ padding:16px; border-bottom:1px solid var(--line); display:flex; align-items:center; justify-content:space-between; }
 .drawer-head h2{ font-size:15px; margin:0; }
-.member-list{ flex:1; overflow-y:auto; padding:8px; }
+.drawer-scroll{ flex:1; overflow-y:auto; padding:8px 8px 0; }
+.drawer-section{ padding:10px 8px 14px; border-bottom:1px solid var(--line); }
+.drawer-section:last-child{ border-bottom:none; }
+.drawer-section h3{ font-size:11.5px; font-weight:700; letter-spacing:.4px; text-transform:uppercase; color:var(--muted); margin:0 0 8px; }
+
+.member-list{ }
 .member-card{
-  display:flex; gap:10px; align-items:flex-start;
-  padding:12px 10px; border-radius:var(--radius-sm); margin-bottom:6px;
-  border:1px solid transparent;
-  transition:background .12s, border-color .12s;
+  display:flex; gap:10px; align-items:flex-start; padding:12px 10px; border-radius:var(--radius-sm);
+  margin-bottom:6px; border:1px solid transparent; transition:background .12s, border-color .12s;
 }
 .member-card.locatable{ cursor:pointer; }
 .member-card.locatable:hover{ background:var(--bg-elev-2); }
 .member-card.locatable:active{ transform:scale(.99); }
 .member-card.talking{ border-color:var(--accent); background:rgba(255,159,28,.06); }
 .member-locate{ flex:none; align-self:center; opacity:.55; font-size:13px; }
+.member-remove{
+  flex:none; align-self:center; width:24px; height:24px; border-radius:50%; border:1px solid var(--line);
+  background:var(--bg-elev-2); color:var(--danger); font-size:11px; display:flex; align-items:center; justify-content:center;
+}
 .member-chan{
   font-family:var(--font-mono); font-size:11px; font-weight:700; color:#1a1200;
   background:var(--chan-color, var(--accent-2)); width:38px; height:22px; border-radius:5px;
   display:flex; align-items:center; justify-content:center; flex:none; margin-top:1px;
 }
 .member-main{ flex:1; min-width:0; }
-.member-name-row{ display:flex; align-items:center; gap:6px; }
+.member-name-row{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
 .member-name{ font-size:13.5px; font-weight:700; }
 .member-name.me{ color:var(--accent-2); }
 .status-dot{ width:7px; height:7px; border-radius:50%; background:var(--online); flex:none; }
 .status-dot.offline{ background:var(--offline); }
 .member-tag{ font-size:10px; color:var(--muted); font-family:var(--font-mono); }
-.member-stats{
-  display:flex; gap:12px; margin-top:4px; font-family:var(--font-mono); font-size:11.5px; color:var(--muted);
-}
+.member-stats{ display:flex; gap:12px; margin-top:4px; font-family:var(--font-mono); font-size:11.5px; color:var(--muted); flex-wrap:wrap; }
 .member-stats b{ color:var(--text); font-weight:600; }
 .member-updated{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+.member-meta{ font-size:10.5px; color:var(--muted); margin-top:3px; }
 .member-empty{ padding:30px 16px; text-align:center; color:var(--muted); font-size:13px; }
 
 .drawer-foot{ padding:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
 
 /* Map controls */
 .map-fab{
-  position:absolute; z-index:470;
-  width:42px; height:42px; border-radius:50%;
+  position:absolute; z-index:470; width:42px; height:42px; border-radius:50%;
   background:var(--bg-elev); border:1px solid var(--line); box-shadow:var(--shadow);
   display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--text);
 }
 #recenter-btn{ right:12px; bottom:calc(env(safe-area-inset-bottom,0px) + 128px); }
 
-/* PTT Beacon Button — signature element */
+/* PTT Beacon Button */
 #ptt-wrap{
   position:absolute; left:0; right:0; bottom:calc(env(safe-area-inset-bottom,0px) + 20px);
   display:flex; flex-direction:column; align-items:center; gap:8px; z-index:475;
 }
-#ptt-hint{ font-size:11px; color:var(--muted); font-family:var(--font-mono); letter-spacing:.5px; }
+#ptt-hint{ font-size:11px; color:var(--muted); font-family:var(--font-mono); letter-spacing:.5px; text-align:center; padding:0 20px; }
 #ptt-btn{
   width:88px; height:88px; border-radius:50%; border:none; position:relative;
-  background:
-    radial-gradient(circle at 35% 30%, #232936, var(--bg-elev) 70%);
+  background: radial-gradient(circle at 35% 30%, #232936, var(--bg-elev) 70%);
   box-shadow: var(--shadow), inset 0 0 0 2px var(--line);
   display:flex; align-items:center; justify-content:center;
   user-select:none; -webkit-user-select:none; touch-action:none;
@@ -285,27 +299,18 @@ button{ cursor:pointer; }
   background:conic-gradient(from 0deg, var(--accent), transparent 40%, transparent 60%, var(--accent));
   opacity:.55; animation: beaconSweep 3.2s linear infinite;
 }
-#ptt-btn::after{
-  content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg-elev);
-}
-#ptt-btn .ptt-core{
-  position:relative; z-index:2; font-size:26px; color:var(--accent);
-}
+#ptt-btn::after{ content:""; position:absolute; inset:4px; border-radius:50%; background:var(--bg-elev); }
+#ptt-btn .ptt-core{ position:relative; z-index:2; font-size:26px; color:var(--accent); }
 @keyframes beaconSweep{ from{ transform:rotate(0deg);} to{ transform:rotate(360deg);} }
-#ptt-btn.active{
-  background:radial-gradient(circle at 35% 30%, #3a2200, var(--bg-elev) 70%);
-}
+#ptt-btn.active{ background:radial-gradient(circle at 35% 30%, #3a2200, var(--bg-elev) 70%); }
 #ptt-btn.active::before{ animation:none; opacity:1; background:var(--accent); filter:blur(1px); }
 #ptt-btn.active .ptt-core{ color:#fff2df; }
 #ptt-btn.active{ box-shadow:0 0 0 10px rgba(255,159,28,.16), var(--shadow); }
 #ptt-btn.disabled{ opacity:.4; pointer-events:none; }
+#ptt-btn.muted-mode::before{ background:conic-gradient(from 0deg, var(--muted), transparent 40%, transparent 60%, var(--muted)); }
 
 /* Leaflet marker styling */
 .marker-wrap{ display:flex; flex-direction:column; align-items:center; pointer-events:none; }
-/* Fixed-size box so the true GPS point always lands on its exact
-   center, regardless of whether we're rendering a heading arrow
-   (22px) or a plain dot (16px) inside it — this is what the
-   iconAnchor below is measured against. */
 .marker-icon-box{ width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
 .marker-arrow{
   width:22px; height:22px; clip-path: polygon(50% 0%, 85% 90%, 50% 68%, 15% 90%);
@@ -338,7 +343,7 @@ button{ cursor:pointer; }
 
 @media (min-width: 720px){
   #ptt-btn{ width:100px; height:100px; }
-  #drawer{ width:340px; }
+  #drawer{ width:360px; }
 }
 </style>
 </head>
@@ -376,12 +381,28 @@ button{ cursor:pointer; }
 
     <form id="signup-form" class="hidden">
       <div class="field">
-        <label for="signup-name">Display name</label>
-        <input id="signup-name" type="text" autocomplete="name" required maxlength="30" placeholder="What convoy members will see" />
+        <label for="signup-fullname">Full name</label>
+        <input id="signup-fullname" type="text" autocomplete="name" required maxlength="60" placeholder="Jordan Rivera" />
       </div>
       <div class="field">
         <label for="signup-email">Email</label>
         <input id="signup-email" type="email" autocomplete="email" required />
+      </div>
+      <div class="field">
+        <label for="signup-mobile">Mobile number</label>
+        <input id="signup-mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="+1 555 123 4567" />
+      </div>
+      <div class="field">
+        <label for="signup-blood">Blood group</label>
+        <select id="signup-blood" required>
+          <option value="" disabled selected>Select blood group</option>
+          <option>A+</option><option>A-</option>
+          <option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option>
+          <option>O+</option><option>O-</option>
+          <option>Unknown</option>
+        </select>
+        <div class="field-hint">Shown only to your fellow convoy members, in case of emergency.</div>
       </div>
       <div class="field">
         <label for="signup-password">Password</label>
@@ -395,16 +416,25 @@ button{ cursor:pointer; }
 </div>
 
 <!-- ============================================================
-     SCREEN 2 — CONVOY (Create / Join)
+     SCREEN 2 — MY CONVOYS (saved groups + create/join)
      ============================================================ -->
-<div id="convoy-screen" class="screen hidden">
+<div id="convoys-screen" class="screen hidden">
   <div class="card">
+    <div class="top-actions">
+      <button id="profile-btn" class="icon-btn" title="My profile">👤</button>
+      <button id="theme-btn-convoys" class="icon-btn" title="Toggle dark/light">◐</button>
+    </div>
     <div class="brand">
       <div class="brand-mark"></div>
       <div>
         <div class="brand-title" id="welcome-name">Welcome</div>
-        <div class="brand-sub">CREATE OR JOIN A CONVOY</div>
+        <div class="brand-sub">YOUR SAVED GROUPS</div>
       </div>
+    </div>
+
+    <div class="section-label">My convoys</div>
+    <div id="my-convoys-list" class="convoy-list">
+      <div class="convoy-list-empty">Loading…</div>
     </div>
 
     <div class="tabs">
@@ -437,7 +467,64 @@ button{ cursor:pointer; }
 </div>
 
 <!-- ============================================================
-     SCREEN 3 — APP (Map + PTT + Roster)
+     SCREEN 3 — PROFILE
+     ============================================================ -->
+<div id="profile-screen" class="screen hidden">
+  <div class="card">
+    <div class="top-actions">
+      <button id="profile-back-btn" class="icon-btn" title="Back">←</button>
+    </div>
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <div>
+        <div class="brand-title">My profile</div>
+        <div class="brand-sub">ACCOUNT &amp; PRIVACY</div>
+      </div>
+    </div>
+
+    <form id="profile-form">
+      <div class="field">
+        <label>Email</label>
+        <input id="profile-email" type="email" disabled />
+      </div>
+      <div class="field">
+        <label for="profile-fullname">Full name</label>
+        <input id="profile-fullname" type="text" required maxlength="60" />
+      </div>
+      <div class="field">
+        <label for="profile-mobile">Mobile number</label>
+        <input id="profile-mobile" type="tel" maxlength="20" />
+      </div>
+      <div class="field">
+        <label for="profile-blood">Blood group</label>
+        <select id="profile-blood">
+          <option>A+</option><option>A-</option>
+          <option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option>
+          <option>O+</option><option>O-</option>
+          <option>Unknown</option>
+        </select>
+      </div>
+
+      <div class="switch-row" style="border-top:1px solid var(--line); margin-top:6px; padding-top:16px;">
+        <div>
+          <div class="switch-row-label">Share my location</div>
+          <div class="switch-row-sub">Master switch — off hides your location from every convoy, everywhere.</div>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="profile-location-toggle" checked />
+          <span class="switch-slider"></span>
+        </label>
+      </div>
+
+      <button class="btn btn-primary" type="submit" style="margin-top:14px;">Save changes</button>
+    </form>
+    <div id="profile-msg" class="msg"></div>
+  </div>
+</div>
+
+<!-- ============================================================
+     SCREEN 4 — APP (Map + PTT + Roster/Settings drawer)
      ============================================================ -->
 <div id="app-screen" class="screen hidden">
   <div id="map"></div>
@@ -453,7 +540,7 @@ button{ cursor:pointer; }
     <div class="spacer"></div>
     <button id="install-btn" class="icon-btn hidden" title="Install app">⬇</button>
     <button id="theme-btn" class="icon-btn" title="Toggle dark/light">◐</button>
-    <button id="roster-btn" class="icon-btn" title="Members">☰</button>
+    <button id="roster-btn" class="icon-btn" title="Members &amp; settings">☰</button>
   </div>
 
   <div id="gps-banner" class="banner hidden"></div>
@@ -477,7 +564,58 @@ button{ cursor:pointer; }
       <h2>Convoy roster</h2>
       <button id="drawer-close" class="icon-btn" style="width:32px;height:32px;font-size:14px;">✕</button>
     </div>
-    <div id="member-list" class="member-list"></div>
+    <div class="drawer-scroll">
+      <div class="drawer-section">
+        <h3>Members</h3>
+        <div id="member-list" class="member-list"></div>
+      </div>
+
+      <div class="drawer-section">
+        <h3>My sharing</h3>
+        <div class="switch-row">
+          <div>
+            <div class="switch-row-label">Share my location in this convoy</div>
+            <div class="switch-row-sub" id="global-sharing-note">Global sharing is on</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="my-sharing-toggle" checked />
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <div id="owner-settings" class="drawer-section hidden">
+        <h3>Convoy settings (owner)</h3>
+        <div class="switch-row">
+          <div>
+            <div class="switch-row-label">Push-to-talk mode</div>
+            <div class="switch-row-sub">Off = open mic, everyone can talk freely</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-ptt-toggle" checked />
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <div class="switch-row">
+          <div>
+            <div class="switch-row-label">Silence everyone</div>
+            <div class="switch-row-sub">Disables voice for the whole convoy, including you</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="setting-mute-toggle" />
+            <span class="switch-slider"></span>
+          </label>
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <label for="add-member-email">Add member by email</label>
+          <div class="btn-row">
+            <input id="add-member-email" type="email" placeholder="email@example.com" />
+            <button id="add-member-btn" class="btn btn-primary btn-sm" type="button">Add</button>
+          </div>
+        </div>
+        <div id="owner-settings-msg" class="msg"></div>
+      </div>
+    </div>
     <div class="drawer-foot">
       <button id="copy-code-btn" class="btn btn-ghost" type="button">Copy convoy code</button>
       <button id="leave-btn" class="btn btn-danger" type="button">Leave convoy</button>
@@ -494,14 +632,13 @@ button{ cursor:pointer; }
    >>> PASTE YOUR SUPABASE CREDENTIALS HERE <<<
    Get these from: Supabase Dashboard -> Project Settings -> API
    ============================================================ */
-const SUPABASE_URL = 'httpseyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3Ug.supabase.co';         // e.g. 'https://xxxxxxxxxxxx.supabase.co'
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // the "anon public" key
+const SUPABASE_URL = 'https://jbgusipoxybfzzfgikfg.supabase.co';         // e.g. 'https://xxxxxxxxxxxx.supabase.co'
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3U'; // the "anon public" key
 
-// Tunables
-const LOCATION_MIN_INTERVAL_MS = 3000;   // baseline update cadence (2000-5000ms range required)
+const LOCATION_MIN_INTERVAL_MS = 3000;
 const LOCATION_LOW_BATTERY_INTERVAL_MS = 6000;
 const LOCATION_BACKGROUND_INTERVAL_MS = 10000;
-const STALE_OFFLINE_MS = 30000;          // grey out a member if no update for this long
+const STALE_OFFLINE_MS = 30000;
 const HEARTBEAT_MS = 15000;
 const ICE_SERVERS = [
   { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }
@@ -509,12 +646,6 @@ const ICE_SERVERS = [
 
 /* ============================================================
    1b. UI WIRING THAT MUST NEVER DEPEND ON SUPABASE
-   ------------------------------------------------------------
-   Tab switching and dark-mode toggling are pure UI and must keep
-   working even if Supabase fails to initialize below (e.g. the
-   credentials above are still placeholders). Wiring these up
-   first, before anything that can throw, guarantees the Sign up
-   / Log in tabs are always clickable.
    ============================================================ */
 function $(sel){ return document.querySelector(sel); }
 function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
@@ -541,29 +672,15 @@ $all('[data-convoy-tab]').forEach(btn => btn.addEventListener('click', () => {
 
 /* ============================================================
    2. SUPABASE CLIENT
-   ------------------------------------------------------------
-   Wrapped in try/catch: an invalid or still-placeholder URL/key
-   throws synchronously inside createClient(), which — if left
-   unguarded — would halt the entire script and silently break
-   every button below it. If this fails, supabaseClient stays
-   null and every Supabase-dependent action shows a clear error
-   instead of the page appearing "stuck".
    ============================================================ */
 let supabaseClient = null;
 let supabaseInitError = null;
 try {
   const credentialsArePlaceholders =
     SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
-  if (credentialsArePlaceholders) {
-    throw new Error('Supabase credentials have not been set yet.');
-  }
+  if (credentialsArePlaceholders) throw new Error('Supabase credentials have not been set yet.');
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      storage: window.localStorage,
-      storageKey: 'convoy-intercom-auth'
-    }
+    auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage, storageKey: 'convoy-intercom-auth' }
   });
 } catch (err) {
   supabaseInitError = err.message || String(err);
@@ -583,17 +700,18 @@ const state = {
   session: null,
   user: null,
   profile: null,
-  convoy: null,                 // { id, code, name, created_by }
-  members: new Map(),           // user_id -> { display_name, role, online, last_seen, channel_no }
-  locations: new Map(),         // user_id -> { lat,lng,heading,speed,accuracy,updated_at }
-  markers: new Map(),           // user_id -> Leaflet marker
+  myConvoys: [],
+  convoy: null,                 // { id, code, name, created_by, ptt_enabled, voice_muted }
+  members: new Map(),           // user_id -> { display_name, role, online, last_seen, channel_no, blood_group, mobile_number, email }
+  locations: new Map(),
+  markers: new Map(),
   map: null,
   watchId: null,
-  channel: null,                // supabase realtime channel for this convoy
-  peers: new Map(),             // user_id -> { pc }
+  channel: null,
+  peers: new Map(),
   localStream: null,
   micRequested: false,
-  talking: new Set(),           // user_ids currently talking
+  talking: new Set(),
   myLocation: null,
   lastCoords: null,
   lastCoordsTime: null,
@@ -603,7 +721,9 @@ const state = {
   heartbeatTimer: null,
   tickerTimer: null,
   healthCheckTimer: null,
-  channelNoCounter: 0
+  channelNoCounter: 0,
+  mySharingEnabledHere: true,
+  profileReturnScreen: 'convoys'
 };
 
 /* ============================================================
@@ -612,14 +732,12 @@ const state = {
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
-
 function genConvoyCode(){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars (0,O,1,I)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let out = '';
   for (let i = 0; i < 6; i++) out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
-
 function haversineMeters(lat1, lon1, lat2, lon2){
   const R = 6371000;
   const toRad = d => d * Math.PI / 180;
@@ -628,7 +746,6 @@ function haversineMeters(lat1, lon1, lat2, lon2){
   const a = Math.sin(dLat/2)**2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
 }
-
 function bearingDegrees(lat1, lon1, lat2, lon2){
   const toRad = d => d * Math.PI / 180;
   const toDeg = r => r * 180 / Math.PI;
@@ -637,18 +754,15 @@ function bearingDegrees(lat1, lon1, lat2, lon2){
             Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
   return (toDeg(Math.atan2(y, x)) + 360) % 360;
 }
-
 function formatDistance(meters){
   if (meters == null || isNaN(meters)) return '—';
   if (meters < 1000) return `${Math.round(meters)} m`;
   return `${(meters/1000).toFixed(1)} km`;
 }
-
 function formatSpeed(mps){
   if (mps == null || isNaN(mps) || mps < 0) return '—';
   return `${Math.round(mps * 3.6)} km/h`;
 }
-
 function formatRelativeTime(iso){
   if (!iso) return '—';
   const diff = Math.max(0, Date.now() - new Date(iso).getTime());
@@ -660,20 +774,12 @@ function formatRelativeTime(iso){
   const h = Math.floor(m/60);
   return `${h}h ago`;
 }
-
 function colorForUser(userId){
   let hash = 0;
   for (let i = 0; i < userId.length; i++) hash = userId.charCodeAt(i) + ((hash << 5) - hash);
   const hue = Math.abs(hash) % 360;
   return `hsl(${hue}, 78%, 58%)`;
 }
-
-function channelNoForUser(userId){
-  const m = state.members.get(userId);
-  if (m && m.channel_no) return m.channel_no;
-  return '--';
-}
-
 function showToast(message, type){
   const stack = $('#toast-stack');
   const el = document.createElement('div');
@@ -682,13 +788,12 @@ function showToast(message, type){
   stack.appendChild(el);
   setTimeout(() => { el.remove(); }, 4500);
 }
-
 function showScreen(name){
   $('#auth-screen').classList.toggle('hidden', name !== 'auth');
-  $('#convoy-screen').classList.toggle('hidden', name !== 'convoy');
+  $('#convoys-screen').classList.toggle('hidden', name !== 'convoys');
+  $('#profile-screen').classList.toggle('hidden', name !== 'profile');
   $('#app-screen').classList.toggle('hidden', name !== 'app');
 }
-
 function setFormMsg(elId, text, type){
   const el = $(elId);
   el.textContent = text;
@@ -698,10 +803,6 @@ function setFormMsg(elId, text, type){
 
 /* ============================================================
    5. AUTH
-   ------------------------------------------------------------
-   Note: the Sign up / Log in tab-switch listeners are wired up
-   earlier in section 1b, before Supabase initialization, so they
-   keep working even if Supabase isn't configured yet.
    ============================================================ */
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -722,19 +823,23 @@ $('#signup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#auth-msg')) return;
   setFormMsg('#auth-msg', '');
-  const displayName = $('#signup-name').value.trim();
+  const fullName = $('#signup-fullname').value.trim();
   const email = $('#signup-email').value.trim();
+  const mobile = $('#signup-mobile').value.trim();
+  const blood = $('#signup-blood').value;
   const password = $('#signup-password').value;
+  if (!blood) { setFormMsg('#auth-msg', 'Please select a blood group.', 'error'); return; }
   const submitBtn = e.target.querySelector('button[type=submit]');
   submitBtn.disabled = true;
   const { data, error } = await supabaseClient.auth.signUp({
-    email, password, options: { data: { display_name: displayName } }
+    email, password,
+    options: { data: { full_name: fullName, mobile_number: mobile, blood_group: blood } }
   });
   submitBtn.disabled = false;
   if (error) { setFormMsg('#auth-msg', error.message, 'error'); return; }
 
   if (data.session) {
-    await ensureProfile(data.user, displayName);
+    await ensureProfile(data.user, { fullName, mobile, blood });
     await afterAuthSuccess();
   } else {
     setFormMsg('#auth-msg', 'Account created. Check your email to confirm, then log in.', 'info');
@@ -748,11 +853,14 @@ $('#signout-btn').addEventListener('click', async () => {
   location.reload();
 });
 
-async function ensureProfile(user, displayNameHint){
-  const displayName = displayNameHint || user.user_metadata?.display_name || (user.email ? user.email.split('@')[0] : 'Driver');
-  const { error } = await supabaseClient
-    .from('profiles')
-    .upsert({ id: user.id, display_name: displayName }, { onConflict: 'id' });
+async function ensureProfile(user, hints){
+  hints = hints || {};
+  const fullName = hints.fullName || user.user_metadata?.full_name || (user.email ? user.email.split('@')[0] : 'Driver');
+  const mobile = hints.mobile ?? user.user_metadata?.mobile_number ?? null;
+  const blood = hints.blood || user.user_metadata?.blood_group || 'Unknown';
+  const { error } = await supabaseClient.from('profiles').upsert({
+    id: user.id, full_name: fullName, email: user.email, mobile_number: mobile, blood_group: blood
+  }, { onConflict: 'id' });
   if (error) console.error('profile upsert failed', error);
 }
 
@@ -762,12 +870,11 @@ async function afterAuthSuccess(){
   state.user = session.user;
 
   const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', state.user.id).maybeSingle();
-  state.profile = profile || { id: state.user.id, display_name: state.user.email.split('@')[0] };
+  state.profile = profile || { id: state.user.id, full_name: state.user.email.split('@')[0], email: state.user.email, location_sharing_enabled: true };
 
-  $('#welcome-name').textContent = `Hi, ${state.profile.display_name}`;
+  $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
 
-  // Try to resume a previously joined convoy
-  const savedConvoyId = localStorage.getItem('convoy_intercom_convoy_id');
+  const savedConvoyId = localStorage.getItem('convoy_intercom_active_convoy_id');
   if (savedConvoyId) {
     const { data: membership } = await supabaseClient
       .from('convoy_members').select('convoy_id').eq('convoy_id', savedConvoyId).eq('user_id', state.user.id).maybeSingle();
@@ -775,27 +882,63 @@ async function afterAuthSuccess(){
       const { data: convoy } = await supabaseClient.from('convoys').select('*').eq('id', savedConvoyId).maybeSingle();
       if (convoy) { await enterConvoy(convoy); return; }
     }
-    localStorage.removeItem('convoy_intercom_convoy_id');
+    localStorage.removeItem('convoy_intercom_active_convoy_id');
   }
-  showScreen('convoy');
+  await showConvoysScreen();
 }
 
-if (supabaseClient) {
-  supabaseClient.auth.onAuthStateChange((event) => {
-    if (event === 'SIGNED_OUT') showScreen('auth');
-  });
-}
+supabaseClient?.auth.onAuthStateChange((event) => {
+  if (event === 'SIGNED_OUT') showScreen('auth');
+});
 
 /* ============================================================
-   6. CONVOY — create / join / leave
-   ------------------------------------------------------------
-   Note: the Join / Create tab-switch listeners are wired up
-   earlier in section 1b, before Supabase initialization.
+   6. MY CONVOYS (saved groups) + CREATE / JOIN / LEAVE
    ============================================================ */
+async function showConvoysScreen(){
+  showScreen('convoys');
+  await loadMyConvoys();
+}
+
+async function loadMyConvoys(){
+  const list = $('#my-convoys-list');
+  list.innerHTML = '<div class="convoy-list-empty">Loading…</div>';
+  const { data, error } = await supabaseClient
+    .from('convoy_members')
+    .select('role, convoys(id, name, code, created_by, ptt_enabled, voice_muted)')
+    .eq('user_id', state.user.id);
+
+  if (error) { list.innerHTML = '<div class="convoy-list-empty">Could not load your convoys.</div>'; return; }
+
+  const convoys = (data || []).filter(r => r.convoys).map(r => ({ ...r.convoys, myRole: r.role }));
+  state.myConvoys = convoys;
+
+  if (convoys.length === 0) {
+    list.innerHTML = '<div class="convoy-list-empty">You have not joined any convoys yet. Create one or enter a code below.</div>';
+    return;
+  }
+
+  list.innerHTML = convoys.map(c => `
+    <div class="convoy-row" data-convoy-id="${escapeHtml(c.id)}">
+      <div class="convoy-row-main">
+        <div class="convoy-row-name">${escapeHtml(c.name)}</div>
+        <div class="convoy-row-code">CODE ${escapeHtml(c.code)}</div>
+      </div>
+      <span class="convoy-row-badge ${c.myRole === 'owner' ? 'owner' : ''}">${c.myRole === 'owner' ? 'OWNER' : 'MEMBER'}</span>
+    </div>
+  `).join('');
+}
+
+$('#my-convoys-list').addEventListener('click', (e) => {
+  const row = e.target.closest('.convoy-row');
+  if (!row) return;
+  const convoy = state.myConvoys.find(c => c.id === row.dataset.convoyId);
+  if (convoy) enterConvoy(convoy);
+});
+
 $('#create-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#convoy-msg')) return;
-  primePermissions(); // ask for location + mic immediately, tied to this tap
+  primePermissions();
   setFormMsg('#convoy-msg', '');
   const name = $('#create-name').value.trim();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -807,15 +950,16 @@ $('#create-form').addEventListener('submit', async (e) => {
       const { data, error } = await supabaseClient
         .from('convoys').insert({ code, name, created_by: state.user.id }).select().single();
       if (!error) { convoy = data; break; }
-      if (error.code !== '23505') throw error; // not a unique-violation, rethrow
+      if (error.code !== '23505') throw error;
     }
     if (!convoy) throw new Error('Could not generate a unique convoy code, please try again.');
 
     const { error: memberErr } = await supabaseClient.from('convoy_members').insert({
-      convoy_id: convoy.id, user_id: state.user.id, display_name: state.profile.display_name, role: 'owner'
+      convoy_id: convoy.id, user_id: state.user.id, display_name: state.profile.full_name, role: 'owner'
     });
     if (memberErr) throw memberErr;
 
+    $('#create-name').value = '';
     await enterConvoy(convoy);
   } catch (err) {
     setFormMsg('#convoy-msg', err.message || 'Failed to create convoy.', 'error');
@@ -828,7 +972,7 @@ $('#create-form').addEventListener('submit', async (e) => {
 $('#join-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#convoy-msg')) return;
-  primePermissions(); // ask for location + mic immediately, tied to this tap
+  primePermissions();
   setFormMsg('#convoy-msg', '');
   const code = $('#join-code').value.trim().toUpperCase();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -843,11 +987,12 @@ $('#join-form').addEventListener('submit', async (e) => {
 
     if (!existing) {
       const { error: memberErr } = await supabaseClient.from('convoy_members').insert({
-        convoy_id: convoy.id, user_id: state.user.id, display_name: state.profile.display_name, role: 'member'
+        convoy_id: convoy.id, user_id: state.user.id, display_name: state.profile.full_name, role: 'member'
       });
       if (memberErr) throw memberErr;
     }
 
+    $('#join-code').value = '';
     await enterConvoy(convoy);
   } catch (err) {
     setFormMsg('#convoy-msg', err.message || 'Failed to join convoy.', 'error');
@@ -859,7 +1004,7 @@ $('#join-form').addEventListener('submit', async (e) => {
 
 async function enterConvoy(convoy){
   state.convoy = convoy;
-  localStorage.setItem('convoy_intercom_convoy_id', convoy.id);
+  localStorage.setItem('convoy_intercom_active_convoy_id', convoy.id);
 
   $('#app-convoy-name').textContent = convoy.name;
   $('#app-convoy-code').textContent = `CODE ${convoy.code}`;
@@ -873,7 +1018,9 @@ async function enterConvoy(convoy){
   startTicker();
   startHealthCheck();
   requestGeolocationAndStart();
-  ensureMicAccess(); // proactive — kept muted until PTT is pressed
+  await onVoiceSettingsChanged();
+  renderOwnerSettingsPanel();
+  renderMySharingToggle();
 }
 
 async function loadInitialMembersAndLocations(){
@@ -881,13 +1028,28 @@ async function loadInitialMembersAndLocations(){
     .from('convoy_members').select('*').eq('convoy_id', state.convoy.id);
   state.members.clear();
   state.channelNoCounter = 0;
-  (members || []).sort((a,b) => new Date(a.joined_at) - new Date(b.joined_at)).forEach(m => {
+
+  const sortedMembers = (members || []).sort((a,b) => new Date(a.joined_at) - new Date(b.joined_at));
+  const memberIds = sortedMembers.map(m => m.user_id);
+  let profilesById = new Map();
+  if (memberIds.length) {
+    const { data: profs } = await supabaseClient.from('profiles').select('id, blood_group, mobile_number, email').in('id', memberIds);
+    profilesById = new Map((profs || []).map(p => [p.id, p]));
+  }
+
+  sortedMembers.forEach(m => {
     state.channelNoCounter++;
+    const prof = profilesById.get(m.user_id) || {};
     state.members.set(m.user_id, {
       display_name: m.display_name, role: m.role, online: false,
-      last_seen: m.last_seen, channel_no: state.channelNoCounter
+      last_seen: m.last_seen, channel_no: state.channelNoCounter,
+      location_sharing_enabled: m.location_sharing_enabled,
+      blood_group: prof.blood_group, mobile_number: prof.mobile_number, email: prof.email
     });
   });
+
+  const mine = sortedMembers.find(m => m.user_id === state.user.id);
+  state.mySharingEnabledHere = mine ? mine.location_sharing_enabled : true;
 
   const { data: locs } = await supabaseClient
     .from('locations').select('*').eq('convoy_id', state.convoy.id);
@@ -899,6 +1061,13 @@ async function loadInitialMembersAndLocations(){
   });
 
   renderMemberList();
+}
+
+async function fetchAndMergeProfile(userId){
+  const { data: prof } = await supabaseClient.from('profiles').select('id, blood_group, mobile_number, email').eq('id', userId).maybeSingle();
+  if (!prof) return;
+  const m = state.members.get(userId);
+  if (m) { m.blood_group = prof.blood_group; m.mobile_number = prof.mobile_number; m.email = prof.email; renderMemberList(); }
 }
 
 async function leaveConvoy(){
@@ -915,18 +1084,34 @@ async function leaveConvoy(){
     await supabaseClient.from('locations').delete().eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
     await supabaseClient.from('convoy_members').delete().eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
 
-    clearMapMarkers();
-    state.members.clear();
-    state.locations.clear();
-    state.convoy = null;
-    localStorage.removeItem('convoy_intercom_convoy_id');
-    closeDrawer();
-    showScreen('convoy');
+    await exitToConvoysScreen();
   } catch (err) {
     showToast(err.message || 'Failed to leave convoy.', 'error');
   }
 }
 $('#leave-btn').addEventListener('click', leaveConvoy);
+
+async function exitToConvoysScreen(){
+  clearMapMarkers();
+  state.members.clear();
+  state.locations.clear();
+  state.convoy = null;
+  localStorage.removeItem('convoy_intercom_active_convoy_id');
+  closeDrawer();
+  await showConvoysScreen();
+}
+
+async function handleBeingRemovedFromConvoy(){
+  showToast('You were removed from this convoy.', 'error');
+  stopTalking();
+  closeAllPeers();
+  stopLocationTracking();
+  stopHeartbeat();
+  stopTicker();
+  stopHealthCheck();
+  if (state.channel) { await supabaseClient.removeChannel(state.channel); state.channel = null; }
+  await exitToConvoysScreen();
+}
 
 $('#copy-code-btn').addEventListener('click', async () => {
   try {
@@ -938,7 +1123,151 @@ $('#copy-code-btn').addEventListener('click', async () => {
 });
 
 /* ============================================================
-   7. REALTIME — presence, location broadcast, talking, signaling
+   6b. OWNER CONTROLS — PTT toggle, silence-all, add/remove members
+   ============================================================ */
+function isOwner(){
+  return !!(state.convoy && state.user && state.convoy.created_by === state.user.id);
+}
+
+function renderOwnerSettingsPanel(){
+  const panel = $('#owner-settings');
+  panel.classList.toggle('hidden', !isOwner());
+  if (!isOwner()) return;
+  $('#setting-ptt-toggle').checked = !!state.convoy.ptt_enabled;
+  $('#setting-mute-toggle').checked = !!state.convoy.voice_muted;
+}
+
+$('#setting-ptt-toggle').addEventListener('change', async (e) => {
+  const ptt_enabled = e.target.checked;
+  const { error } = await supabaseClient.from('convoys').update({ ptt_enabled }).eq('id', state.convoy.id);
+  if (error) { e.target.checked = !ptt_enabled; showToast(error.message || 'Failed to update.', 'error'); return; }
+  state.convoy.ptt_enabled = ptt_enabled;
+  await onVoiceSettingsChanged();
+});
+
+$('#setting-mute-toggle').addEventListener('change', async (e) => {
+  const voice_muted = e.target.checked;
+  const { error } = await supabaseClient.from('convoys').update({ voice_muted }).eq('id', state.convoy.id);
+  if (error) { e.target.checked = !voice_muted; showToast(error.message || 'Failed to update.', 'error'); return; }
+  state.convoy.voice_muted = voice_muted;
+  await onVoiceSettingsChanged();
+});
+
+$('#add-member-btn').addEventListener('click', async () => {
+  const emailInput = $('#add-member-email');
+  const email = emailInput.value.trim();
+  if (!email) return;
+  const btn = $('#add-member-btn');
+  btn.disabled = true;
+  setFormMsg('#owner-settings-msg', '');
+  const { error } = await supabaseClient.rpc('add_member_by_email', { p_convoy_id: state.convoy.id, p_email: email, p_role: 'member' });
+  btn.disabled = false;
+  if (error) { setFormMsg('#owner-settings-msg', error.message || 'Failed to add member.', 'error'); return; }
+  emailInput.value = '';
+  setFormMsg('#owner-settings-msg', 'Member added.', 'info');
+  showToast('Member added to the convoy.');
+});
+
+async function removeMember(userId){
+  const m = state.members.get(userId);
+  const name = m ? m.display_name : 'this member';
+  if (!confirm(`Remove ${name} from the convoy?`)) return;
+  const { error } = await supabaseClient.from('convoy_members').delete().eq('convoy_id', state.convoy.id).eq('user_id', userId);
+  if (error) { showToast(error.message || 'Failed to remove member.', 'error'); return; }
+  await supabaseClient.from('locations').delete().eq('convoy_id', state.convoy.id).eq('user_id', userId);
+  state.members.delete(userId);
+  removeMarker(userId);
+  renderMemberList();
+  showToast(`${name} removed.`);
+}
+
+/* ============================================================
+   6c. LOCATION SHARING TOGGLES (per-convoy + global)
+   ============================================================ */
+function renderMySharingToggle(){
+  const toggle = $('#my-sharing-toggle');
+  toggle.checked = !!state.mySharingEnabledHere;
+  const globalOn = state.profile?.location_sharing_enabled !== false;
+  $('#global-sharing-note').textContent = globalOn
+    ? 'Global sharing is on'
+    : 'Global sharing is OFF in your profile — turning this on will not share location until you enable it there too.';
+}
+
+$('#my-sharing-toggle').addEventListener('change', async (e) => {
+  const enabled = e.target.checked;
+  const { error } = await supabaseClient
+    .from('convoy_members').update({ location_sharing_enabled: enabled })
+    .eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
+  if (error) { e.target.checked = !enabled; showToast(error.message || 'Failed to update.', 'error'); return; }
+  state.mySharingEnabledHere = enabled;
+  const m = state.members.get(state.user.id);
+  if (m) m.location_sharing_enabled = enabled;
+  if (!enabled) {
+    await supabaseClient.from('locations').delete().eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
+    removeMarker(state.user.id);
+    state.myLocation = null;
+    showToast('Your location is now hidden in this convoy.');
+  } else {
+    showToast('Sharing your location in this convoy.');
+  }
+  renderMemberList();
+});
+
+/* ============================================================
+   7. PROFILE SCREEN
+   ============================================================ */
+$('#profile-btn').addEventListener('click', () => {
+  state.profileReturnScreen = 'convoys';
+  openProfileScreen();
+});
+$('#profile-back-btn').addEventListener('click', () => {
+  showScreen(state.profileReturnScreen === 'app' ? 'app' : 'convoys');
+});
+
+function openProfileScreen(){
+  $('#profile-email').value = state.profile.email || state.user.email || '';
+  $('#profile-fullname').value = state.profile.full_name || '';
+  $('#profile-mobile').value = state.profile.mobile_number || '';
+  $('#profile-blood').value = state.profile.blood_group || 'Unknown';
+  $('#profile-location-toggle').checked = state.profile.location_sharing_enabled !== false;
+  setFormMsg('#profile-msg', '');
+  showScreen('profile');
+}
+
+$('#profile-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const full_name = $('#profile-fullname').value.trim();
+  const mobile_number = $('#profile-mobile').value.trim();
+  const blood_group = $('#profile-blood').value;
+  const location_sharing_enabled = $('#profile-location-toggle').checked;
+  const submitBtn = e.target.querySelector('button[type=submit]');
+  submitBtn.disabled = true;
+  const { error } = await supabaseClient.from('profiles').update({
+    full_name, mobile_number, blood_group, location_sharing_enabled
+  }).eq('id', state.user.id);
+  submitBtn.disabled = false;
+  if (error) { setFormMsg('#profile-msg', error.message || 'Failed to save.', 'error'); return; }
+  state.profile.full_name = full_name;
+  state.profile.mobile_number = mobile_number;
+  state.profile.blood_group = blood_group;
+  const wasEnabled = state.profile.location_sharing_enabled !== false;
+  state.profile.location_sharing_enabled = location_sharing_enabled;
+  setFormMsg('#profile-msg', 'Saved.', 'info');
+  showToast('Profile updated.');
+  if (wasEnabled && !location_sharing_enabled) {
+    // Global switch just turned off — stop sharing immediately if we're in a convoy right now.
+    if (state.convoy) {
+      await supabaseClient.from('locations').delete().eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
+      removeMarker(state.user.id);
+      state.myLocation = null;
+      renderMemberList();
+    }
+  }
+  if (state.convoy) renderMySharingToggle();
+});
+
+/* ============================================================
+   8. REALTIME — presence, location, talking, signaling, convoy settings
    ============================================================ */
 function subscribeRealtime(){
   const channel = supabaseClient.channel('convoy:' + state.convoy.id, {
@@ -959,13 +1288,17 @@ function subscribeRealtime(){
   );
   channel.on('postgres_changes',
     { event: '*', schema: 'public', table: 'locations', filter: `convoy_id=eq.${state.convoy.id}` },
-    (payload) => { if (payload.new) handleLocationUpdate(payload.new, false); }
+    handleLocationRowChange
+  );
+  channel.on('postgres_changes',
+    { event: 'UPDATE', schema: 'public', table: 'convoys', filter: `id=eq.${state.convoy.id}` },
+    handleConvoyRowChange
   );
 
   channel.subscribe(async (status) => {
     setConnDot(status === 'SUBSCRIBED');
     if (status === 'SUBSCRIBED') {
-      await channel.track({ user_id: state.user.id, display_name: state.profile.display_name, online_at: Date.now() });
+      await channel.track({ user_id: state.user.id, display_name: state.profile.full_name, online_at: Date.now() });
     } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
       scheduleRealtimeReconnect();
     }
@@ -974,7 +1307,6 @@ function subscribeRealtime(){
   state.channel = channel;
 }
 
-// Debounced so a burst of error/timeout callbacks only triggers one reconnect attempt.
 let realtimeReconnectTimer = null;
 function scheduleRealtimeReconnect(){
   if (realtimeReconnectTimer) return;
@@ -984,32 +1316,24 @@ function scheduleRealtimeReconnect(){
   }, 3000);
 }
 
-// Full reconnect: fresh realtime channel + fresh WebRTC connections.
-// A network path change (wifi <-> cellular, VPN toggling, sleep/wake)
-// can silently invalidate the old ICE candidates even though nothing
-// in the UI shows an obvious error, which is what previously required
-// a manual page refresh to fix.
 function reconnectRealtime(){
   if (state.channel) { supabaseClient.removeChannel(state.channel); state.channel = null; }
   resetAllPeerConnections();
   subscribeRealtime();
 }
 
-function setConnDot(online){
-  $('#conn-dot').classList.toggle('offline', !online);
-}
+function setConnDot(online){ $('#conn-dot').classList.toggle('offline', !online); }
 
 function handlePresenceSync(){
   const presenceState = state.channel.presenceState();
   const onlineIds = new Set(Object.keys(presenceState));
-  for (const [userId, meta] of state.members.entries()) {
-    meta.online = onlineIds.has(userId);
-  }
+  for (const [userId, meta] of state.members.entries()) meta.online = onlineIds.has(userId);
   onlineIds.forEach(peerId => {
     if (peerId === state.user.id) return;
     if (!state.members.has(peerId)) {
       state.channelNoCounter++;
       state.members.set(peerId, { display_name: 'Member', role: 'member', online: true, channel_no: state.channelNoCounter });
+      fetchAndMergeProfile(peerId);
     }
     maybeInitiatePeerConnection(peerId);
   });
@@ -1032,6 +1356,7 @@ function markOnline(userId, online){
 
 function handleMemberRowChange(payload){
   if (payload.eventType === 'DELETE') {
+    if (payload.old.user_id === state.user.id) { handleBeingRemovedFromConvoy(); return; }
     state.members.delete(payload.old.user_id);
     removeMarker(payload.old.user_id);
   } else {
@@ -1040,28 +1365,61 @@ function handleMemberRowChange(payload){
     if (existing) {
       existing.display_name = row.display_name;
       existing.role = row.role;
+      existing.location_sharing_enabled = row.location_sharing_enabled;
+      if (row.user_id === state.user.id) state.mySharingEnabledHere = row.location_sharing_enabled;
     } else {
       state.channelNoCounter++;
-      state.members.set(row.user_id, { display_name: row.display_name, role: row.role, online: false, channel_no: state.channelNoCounter });
+      state.members.set(row.user_id, {
+        display_name: row.display_name, role: row.role, online: false,
+        channel_no: state.channelNoCounter, location_sharing_enabled: row.location_sharing_enabled
+      });
+      fetchAndMergeProfile(row.user_id);
     }
   }
   renderMemberList();
   refreshAllMarkers();
 }
 
+function handleLocationRowChange(payload){
+  if (payload.eventType === 'DELETE') {
+    const old = payload.old;
+    if (!old || !old.user_id) return;
+    state.locations.delete(old.user_id);
+    removeMarker(old.user_id);
+    renderMemberList();
+  } else if (payload.new) {
+    handleLocationUpdate(payload.new, false);
+  }
+}
+
+function handleConvoyRowChange(payload){
+  const row = payload.new;
+  if (!row) return;
+  const pttChanged = state.convoy.ptt_enabled !== row.ptt_enabled;
+  const muteChanged = state.convoy.voice_muted !== row.voice_muted;
+  state.convoy.name = row.name;
+  state.convoy.ptt_enabled = row.ptt_enabled;
+  state.convoy.voice_muted = row.voice_muted;
+  $('#app-convoy-name').textContent = row.name;
+  renderOwnerSettingsPanel();
+  if (pttChanged || muteChanged) {
+    showToast(row.voice_muted ? 'The convoy owner silenced voice for everyone.' :
+      (pttChanged ? (row.ptt_enabled ? 'Push-to-talk mode is back on.' : 'Open mic mode: everyone can talk freely now.') : 'Voice unmuted.'));
+    onVoiceSettingsChanged();
+  }
+}
+
 function handleLocationUpdate(payload, fromBroadcast){
   const userId = payload.user_id;
   if (userId === state.user.id) return;
   const existing = state.locations.get(userId);
-  if (existing && payload.updated_at && new Date(payload.updated_at) < new Date(existing.updated_at)) return; // stale
-  const loc = {
-    lat: payload.lat, lng: payload.lng, heading: payload.heading, speed: payload.speed,
-    accuracy: payload.accuracy, updated_at: payload.updated_at
-  };
+  if (existing && payload.updated_at && new Date(payload.updated_at) < new Date(existing.updated_at)) return;
+  const loc = { lat: payload.lat, lng: payload.lng, heading: payload.heading, speed: payload.speed, accuracy: payload.accuracy, updated_at: payload.updated_at };
   state.locations.set(userId, loc);
   if (!state.members.has(userId)) {
     state.channelNoCounter++;
     state.members.set(userId, { display_name: 'Member', role: 'member', online: true, channel_no: state.channelNoCounter });
+    fetchAndMergeProfile(userId);
   }
   upsertMemberMarker(userId, loc);
   renderMemberList();
@@ -1095,13 +1453,7 @@ function renderTalkingStrip(){
 }
 
 /* ============================================================
-   8. WEBRTC — mesh voice (push-to-talk)
-   ------------------------------------------------------------
-   Includes "perfect negotiation" (polite/impolite roles) to avoid
-   silent glare failures, ICE candidate queueing for out-of-order
-   signaling, automatic ICE restart + connection recreation when a
-   link degrades, and mic-track health checks — together these
-   are what previously required a manual page refresh to fix.
+   9. WEBRTC — mesh voice (push-to-talk / open mic)
    ============================================================ */
 async function ensureMicAccess(){
   if (state.localStream || state.micRequested) return state.localStream != null;
@@ -1111,25 +1463,20 @@ async function ensureMicAccess(){
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
     stream.getAudioTracks().forEach(t => {
-      t.enabled = false; // muted until PTT held
+      t.enabled = false;
       t.addEventListener('ended', handleMicTrackEnded);
     });
     state.localStream = stream;
     attachLocalStreamToAllPeers();
-    $('#ptt-btn').classList.remove('disabled');
     return true;
   } catch (err) {
     state.micRequested = false;
     $('#ptt-btn').classList.add('disabled');
-    showToast('Microphone permission is required for push-to-talk. Enable it in your browser settings.', 'error');
+    showToast('Microphone permission is required for voice. Enable it in your browser settings.', 'error');
     return false;
   }
 }
 
-// Mobile browsers can silently end the mic track after the tab is
-// backgrounded / the screen locks for a while. Without this handler
-// the local sender keeps referencing a dead track forever and voice
-// stays broken until a manual refresh.
 function handleMicTrackEnded(){
   if (!state.localStream) return;
   showToast('Microphone was disconnected — reconnecting…', 'error');
@@ -1137,35 +1484,26 @@ function handleMicTrackEnded(){
   state.localStream = null;
   state.micRequested = false;
   pttActive = false;
+  openMicMuted = true;
   $('#ptt-btn').classList.remove('active');
   ensureMicAccess();
 }
 
-// Attaches (or re-attaches, via replaceTrack) the current local
-// audio track to every peer. Using replaceTrack on an existing
-// sender — instead of addTrack again — keeps exactly one audio
-// sender per connection even across repeated mic reconnects.
 function attachLocalStreamToAllPeers(){
   if (!state.localStream) return;
   const track = state.localStream.getAudioTracks()[0];
   if (!track) return;
   state.peers.forEach(entry => {
-    if (entry.audioSender) {
-      entry.audioSender.replaceTrack(track).catch(err => console.warn('replaceTrack failed', err));
-    } else {
-      entry.audioSender = entry.pc.addTrack(track, state.localStream);
-    }
+    if (entry.audioSender) entry.audioSender.replaceTrack(track).catch(err => console.warn('replaceTrack failed', err));
+    else entry.audioSender = entry.pc.addTrack(track, state.localStream);
   });
 }
 
 function getOrCreatePeer(peerId){
   if (state.peers.has(peerId)) return state.peers.get(peerId);
-  const polite = state.user.id > peerId; // deterministic role: higher id yields on glare
+  const polite = state.user.id > peerId;
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  const entry = {
-    pc, polite, makingOffer: false, ignoreOffer: false,
-    pendingCandidates: [], audioSender: null, reconnectTimer: null
-  };
+  const entry = { pc, polite, makingOffer: false, ignoreOffer: false, pendingCandidates: [], audioSender: null, reconnectTimer: null };
   state.peers.set(peerId, entry);
 
   if (state.localStream) {
@@ -1173,9 +1511,7 @@ function getOrCreatePeer(peerId){
     if (track) entry.audioSender = pc.addTrack(track, state.localStream);
   }
 
-  pc.onicecandidate = (e) => {
-    if (e.candidate) sendSignal(peerId, { type: 'ice', candidate: e.candidate.toJSON() });
-  };
+  pc.onicecandidate = (e) => { if (e.candidate) sendSignal(peerId, { type: 'ice', candidate: e.candidate.toJSON() }); };
 
   pc.ontrack = (e) => {
     let audioEl = document.getElementById('audio-' + peerId);
@@ -1187,7 +1523,7 @@ function getOrCreatePeer(peerId){
       document.body.appendChild(audioEl);
     }
     audioEl.srcObject = e.streams[0];
-    audioEl.play().catch(() => { /* resolved on next user gesture via unlockAudioPlayback() */ });
+    audioEl.play().catch(() => {});
   };
 
   pc.onnegotiationneeded = async () => {
@@ -1202,31 +1538,19 @@ function getOrCreatePeer(peerId){
 
   pc.oniceconnectionstatechange = () => {
     const s = pc.iceConnectionState;
-    if (s === 'connected' || s === 'completed') {
-      clearReconnectTimer(entry);
-    } else if (s === 'failed') {
-      try { pc.restartIce(); } catch (e) { /* not supported in this browser */ }
-      scheduleConnectionHealthCheck(peerId, 1500);
-    } else if (s === 'disconnected') {
-      scheduleConnectionHealthCheck(peerId, 6000);
-    }
+    if (s === 'connected' || s === 'completed') clearReconnectTimer(entry);
+    else if (s === 'failed') { try { pc.restartIce(); } catch (e) {} scheduleConnectionHealthCheck(peerId, 1500); }
+    else if (s === 'disconnected') scheduleConnectionHealthCheck(peerId, 6000);
   };
-
   pc.onconnectionstatechange = () => {
-    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
-      scheduleConnectionHealthCheck(peerId, 1000);
-    }
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') scheduleConnectionHealthCheck(peerId, 1000);
   };
 
   return entry;
 }
 
-function clearReconnectTimer(entry){
-  if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
-}
+function clearReconnectTimer(entry){ if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; } }
 
-// If a connection is still not healthy after `delay`, tear it down
-// and build a fresh one — this is what replaces "refresh the page".
 function scheduleConnectionHealthCheck(peerId, delay){
   const entry = state.peers.get(peerId);
   if (!entry || entry.reconnectTimer) return;
@@ -1235,7 +1559,7 @@ function scheduleConnectionHealthCheck(peerId, delay){
     if (!current) return;
     current.reconnectTimer = null;
     const stillOnline = !!state.channel?.presenceState()[peerId];
-    if (!stillOnline) return; // presence 'leave' handler already cleaned this up
+    if (!stillOnline) return;
     const healthy = current.pc.connectionState === 'connected' || current.pc.connectionState === 'connecting';
     if (!healthy) recreatePeerConnection(peerId);
   }, delay);
@@ -1243,11 +1567,7 @@ function scheduleConnectionHealthCheck(peerId, delay){
 
 function recreatePeerConnection(peerId){
   const entry = state.peers.get(peerId);
-  if (entry) {
-    clearReconnectTimer(entry);
-    entry.pc.close();
-    state.peers.delete(peerId);
-  }
+  if (entry) { clearReconnectTimer(entry); entry.pc.close(); state.peers.delete(peerId); }
   const audioEl = document.getElementById('audio-' + peerId);
   if (audioEl) audioEl.remove();
   maybeInitiatePeerConnection(peerId, true);
@@ -1255,12 +1575,8 @@ function recreatePeerConnection(peerId){
 
 function maybeInitiatePeerConnection(peerId, force){
   if (!force && state.peers.has(peerId)) return;
-  // Deterministic initiator: the lexicographically smaller user id starts the offer, avoids glare.
-  if (state.user.id < peerId) {
-    initiateConnection(peerId);
-  } else {
-    getOrCreatePeer(peerId); // wait for their offer
-  }
+  if (state.user.id < peerId) initiateConnection(peerId);
+  else getOrCreatePeer(peerId);
 }
 
 async function initiateConnection(peerId){
@@ -1280,9 +1596,7 @@ function sendSignal(to, payload){
 
 async function flushPendingCandidates(entry){
   const queued = entry.pendingCandidates.splice(0);
-  for (const candidate of queued) {
-    try { await entry.pc.addIceCandidate(candidate); } catch (err) { console.warn('queued ICE candidate failed', err); }
-  }
+  for (const candidate of queued) { try { await entry.pc.addIceCandidate(candidate); } catch (err) { console.warn('queued ICE candidate failed', err); } }
 }
 
 async function handleSignal(payload){
@@ -1309,16 +1623,12 @@ async function handleSignal(payload){
       if (pc.remoteDescription && pc.remoteDescription.type) {
         try { await pc.addIceCandidate(payload.candidate); } catch (err) { if (!entry.ignoreOffer) console.warn(err); }
       } else {
-        entry.pendingCandidates.push(payload.candidate); // remote description not set yet — queue it
+        entry.pendingCandidates.push(payload.candidate);
       }
     }
   } catch (err) { console.warn('signal handling failed', err); }
 }
 
-// Tears down every peer connection but keeps the local mic stream
-// alive — used when the realtime/network path changes (e.g. wifi
-// to cellular handover), since the old ICE candidates are no longer
-// valid but the mic itself is still fine.
 function resetAllPeerConnections(){
   state.peers.forEach(entry => { clearReconnectTimer(entry); entry.pc.close(); });
   state.peers.clear();
@@ -1327,15 +1637,10 @@ function resetAllPeerConnections(){
 
 function closeAllPeers(){
   resetAllPeerConnections();
-  if (state.localStream) {
-    state.localStream.getTracks().forEach(t => t.stop());
-    state.localStream = null;
-  }
+  if (state.localStream) { state.localStream.getTracks().forEach(t => t.stop()); state.localStream = null; }
   state.micRequested = false;
 }
 
-// Periodic self-healing: catches degraded mic tracks or peer
-// connections even if no browser event fires to tell us about it.
 function checkMicHealth(){
   if (!state.localStream) return;
   const track = state.localStream.getAudioTracks()[0];
@@ -1346,113 +1651,142 @@ function checkMicHealth(){
     ensureMicAccess();
   }
 }
-
 function checkPeerHealth(){
   state.peers.forEach((entry, peerId) => {
-    if (entry.pc.connectionState === 'failed' || entry.pc.connectionState === 'closed') {
-      recreatePeerConnection(peerId);
-    }
+    if (entry.pc.connectionState === 'failed' || entry.pc.connectionState === 'closed') recreatePeerConnection(peerId);
   });
 }
-
-// Some mobile browsers block autoplay of the very first remote
-// audio element until the user interacts with the page again.
 function unlockAudioPlayback(){
   $all('audio[id^="audio-"]').forEach(el => { if (el.paused) el.play().catch(() => {}); });
 }
 document.addEventListener('click', unlockAudioPlayback);
 document.addEventListener('touchend', unlockAudioPlayback);
 
+/* ---------- Voice mode: push-to-talk vs open mic vs silenced ---------- */
 let pttActive = false;
+let openMicMuted = true;
+
+async function onVoiceSettingsChanged(){
+  if (!state.convoy) return;
+  if (state.convoy.voice_muted) {
+    pttActive = false; openMicMuted = true;
+    if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    broadcastTalking(false);
+  } else if (!state.convoy.ptt_enabled) {
+    openMicMuted = false;
+    const ok = await ensureMicAccess();
+    if (ok) { state.localStream.getAudioTracks().forEach(t => { t.enabled = true; }); broadcastTalking(true); }
+  } else {
+    pttActive = false; openMicMuted = true;
+    if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
+    broadcastTalking(false);
+  }
+  applyVoiceModeUI();
+}
+
+function applyVoiceModeUI(){
+  const btn = $('#ptt-btn');
+  const hint = $('#ptt-hint');
+  if (!state.convoy) return;
+  btn.classList.remove('disabled', 'active', 'muted-mode');
+  if (state.convoy.voice_muted) {
+    btn.classList.add('disabled', 'muted-mode');
+    hint.textContent = 'VOICE SILENCED BY CONVOY OWNER';
+  } else if (state.convoy.ptt_enabled) {
+    hint.textContent = pttActive ? 'RELEASE TO STOP' : 'HOLD TO TALK';
+    if (pttActive) btn.classList.add('active');
+  } else {
+    hint.textContent = openMicMuted ? 'MUTED — TAP TO TALK (OPEN MIC)' : 'TAP TO MUTE (OPEN MIC)';
+    if (!openMicMuted) btn.classList.add('active');
+  }
+}
+
 async function startTalking(){
   if (pttActive) return;
   const ok = await ensureMicAccess();
   if (!ok) return;
   pttActive = true;
   state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
-  $('#ptt-btn').classList.add('active');
   broadcastTalking(true);
+  applyVoiceModeUI();
 }
 function stopTalking(){
   if (!pttActive) return;
   pttActive = false;
   if (state.localStream) state.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-  $('#ptt-btn').classList.remove('active');
   broadcastTalking(false);
+  applyVoiceModeUI();
+}
+async function toggleOpenMicMute(){
+  const ok = await ensureMicAccess();
+  if (!ok) return;
+  openMicMuted = !openMicMuted;
+  const enabled = !openMicMuted;
+  state.localStream.getAudioTracks().forEach(t => { t.enabled = enabled; });
+  broadcastTalking(enabled);
+  applyVoiceModeUI();
 }
 
+function handlePttStart(){
+  if (!state.convoy || state.convoy.voice_muted) return;
+  if (state.convoy.ptt_enabled) startTalking();
+}
+function handlePttEnd(){
+  if (!state.convoy || state.convoy.voice_muted) return;
+  if (state.convoy.ptt_enabled) { stopTalking(); return; }
+  toggleOpenMicMute();
+}
 const pttBtn = $('#ptt-btn');
-['mousedown', 'touchstart'].forEach(ev => pttBtn.addEventListener(ev, (e) => { e.preventDefault(); startTalking(); }, { passive: false }));
-['mouseup', 'mouseleave', 'touchend', 'touchcancel'].forEach(ev => pttBtn.addEventListener(ev, (e) => { e.preventDefault(); stopTalking(); }, { passive: false }));
-document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !isTypingTarget(e.target)) { e.preventDefault(); startTalking(); } });
-document.addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); stopTalking(); } });
-function isTypingTarget(el){ return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA'; }
-window.addEventListener('blur', stopTalking);
+pttBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); handlePttStart(); });
+pttBtn.addEventListener('pointerup', (e) => { e.preventDefault(); handlePttEnd(); });
+pttBtn.addEventListener('pointercancel', () => { handlePttEnd(); });
+pttBtn.addEventListener('pointerleave', () => { if (state.convoy?.ptt_enabled) stopTalking(); });
+document.addEventListener('keydown', (e) => { if (e.code === 'Space' && !e.repeat && !isTypingTarget(e.target)) { e.preventDefault(); handlePttStart(); } });
+document.addEventListener('keyup', (e) => { if (e.code === 'Space') { e.preventDefault(); if (state.convoy?.ptt_enabled) stopTalking(); } });
+function isTypingTarget(el){ return el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT'; }
+window.addEventListener('blur', () => { if (state.convoy?.ptt_enabled) stopTalking(); });
 
 /* ============================================================
-   9. GEOLOCATION — battery-aware tracking
+   10. GEOLOCATION — battery-aware, respects sharing toggles
    ============================================================ */
 if ('getBattery' in navigator) {
-  navigator.getBattery().then(b => {
-    state.battery = b;
-    b.addEventListener('levelchange', () => {});
-    b.addEventListener('chargingchange', () => {});
-  }).catch(() => {});
+  navigator.getBattery().then(b => { state.battery = b; }).catch(() => {});
 }
-
 function getAdaptiveInterval(){
   if (document.hidden) return LOCATION_BACKGROUND_INTERVAL_MS;
   if (state.battery && !state.battery.charging && state.battery.level < 0.2) return LOCATION_LOW_BATTERY_INTERVAL_MS;
   return LOCATION_MIN_INTERVAL_MS;
 }
-
 function requestGeolocationAndStart(){
-  if (!('geolocation' in navigator)) {
-    showBanner('Geolocation is not supported on this device.', 'error');
-    return;
-  }
+  if (!('geolocation' in navigator)) { showBanner('Geolocation is not supported on this device.', 'error'); return; }
   startLocationTracking();
 }
-
-// Called as the very first thing inside the Create/Join submit
-// handlers — synchronously, before any `await` — so the browser
-// ties the location + microphone permission prompts directly to
-// the user's tap. Some browsers (notably Safari/iOS) only honor
-// getUserMedia()/geolocation requests while the original user
-// gesture is still "fresh"; requesting them only later, after
-// several network awaits deep in the convoy-join flow, can cause
-// the prompt to be silently skipped or blocked. Both underlying
-// calls are idempotent, so this is safe to call again later too.
 function primePermissions(){
   requestGeolocationAndStart();
   ensureMicAccess();
 }
-
-// If convoy creation/joining ultimately fails, undo anything we
-// started early so a permission we no longer need doesn't linger.
 function cancelPrimedPermissionsIfNoConvoy(){
-  if (state.convoy) return; // succeeded — keep everything running
+  if (state.convoy) return;
   stopLocationTracking();
-  if (state.localStream) {
-    state.localStream.getTracks().forEach(t => t.stop());
-    state.localStream = null;
-  }
+  if (state.localStream) { state.localStream.getTracks().forEach(t => t.stop()); state.localStream = null; }
   state.micRequested = false;
 }
-
 function startLocationTracking(){
   if (state.watchId != null) return;
-  state.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
-    enableHighAccuracy: true, maximumAge: 1000, timeout: 15000
-  });
+  state.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, { enableHighAccuracy: true, maximumAge: 1000, timeout: 15000 });
 }
-
 function stopLocationTracking(){
   if (state.watchId != null) { navigator.geolocation.clearWatch(state.watchId); state.watchId = null; }
 }
 
+function locationSharingAllowedLocally(){
+  const globalOk = state.profile?.location_sharing_enabled !== false;
+  const hereOk = state.mySharingEnabledHere !== false;
+  return globalOk && hereOk;
+}
+
 function onPosition(pos){
-  if (!state.convoy) return; // permission was primed before the convoy finished being created/joined — ignore until ready
+  if (!state.convoy) return;
   hideBanner();
   const { latitude, longitude, heading, speed, accuracy } = pos.coords;
   const now = Date.now();
@@ -1464,12 +1798,9 @@ function onPosition(pos){
   if (state.lastCoords) {
     const distMoved = haversineMeters(state.lastCoords.lat, state.lastCoords.lng, latitude, longitude);
     const dt = (now - state.lastCoordsTime) / 1000;
-    if (computedHeading === null && distMoved > 3) {
-      computedHeading = bearingDegrees(state.lastCoords.lat, state.lastCoords.lng, latitude, longitude);
-    }
+    if (computedHeading === null && distMoved > 3) computedHeading = bearingDegrees(state.lastCoords.lat, state.lastCoords.lng, latitude, longitude);
     if (computedSpeed === null && dt > 0) computedSpeed = distMoved / dt;
   }
-
   state.lastCoords = { lat: latitude, lng: longitude };
   state.lastCoordsTime = now;
   state.lastSentAt = now;
@@ -1477,41 +1808,37 @@ function onPosition(pos){
   const updatedAt = new Date().toISOString();
   state.myLocation = { lat: latitude, lng: longitude, heading: computedHeading, speed: computedSpeed, accuracy, updated_at: updatedAt };
 
+  if (!locationSharingAllowedLocally()) {
+    removeMarker(state.user.id); // reflect "hidden" state on my own map too
+    return;
+  }
+
   upsertMemberMarker(state.user.id, state.myLocation);
   renderMemberList();
 
-  state.channel?.send({
-    type: 'broadcast', event: 'location',
-    payload: { user_id: state.user.id, ...state.myLocation }
-  });
+  state.channel?.send({ type: 'broadcast', event: 'location', payload: { user_id: state.user.id, ...state.myLocation } });
 
   supabaseClient.from('locations').upsert({
     convoy_id: state.convoy.id, user_id: state.user.id,
-    lat: latitude, lng: longitude, heading: computedHeading, speed: computedSpeed, accuracy,
-    updated_at: updatedAt
+    lat: latitude, lng: longitude, heading: computedHeading, speed: computedSpeed, accuracy, updated_at: updatedAt
   }, { onConflict: 'convoy_id,user_id' }).then(({ error }) => { if (error) console.error('location upsert failed', error); });
 }
 
 function onPositionError(err){
-  if (err.code === err.PERMISSION_DENIED) {
-    showBanner('Location permission denied. Enable it in your browser settings to share your position.', 'error');
-  } else if (err.code === err.TIMEOUT) {
-    showBanner('Waiting for GPS signal…', 'info');
-  } else {
-    showBanner('Location unavailable right now.', 'error');
-  }
+  if (err.code === err.PERMISSION_DENIED) showBanner('Location permission denied. Enable it in your browser settings to share your position.', 'error');
+  else if (err.code === err.TIMEOUT) showBanner('Waiting for GPS signal…', 'info');
+  else showBanner('Location unavailable right now.', 'error');
 }
-
 function showBanner(text, type){
   const el = $('#gps-banner');
   el.textContent = text;
-  el.className = 'banner' + (type === 'info' ? ' info' : '');
+  el.className = 'banner' + (type === 'info' ? ' info' : type === 'warn' ? ' warn' : '');
   el.classList.remove('hidden');
 }
 function hideBanner(){ $('#gps-banner').classList.add('hidden'); }
 
 /* ============================================================
-   10. MAP — Leaflet, markers, popups
+   11. MAP — Leaflet, markers, popups
    ============================================================ */
 function initMap(){
   state.map = L.map('map', { zoomControl: false, attributionControl: true }).setView([20, 0], 3);
@@ -1531,21 +1858,21 @@ function markerHtml(userId, loc){
   const rotation = hasHeading ? loc.heading : 0;
   const name = isMe ? 'You' : (state.members.get(userId)?.display_name || 'Member');
   return `<div class="marker-wrap ${hasHeading ? '' : 'no-heading'} ${online ? '' : 'marker-offline'} ${talking ? 'marker-talking' : ''}">
-    <div class="marker-icon-box">
-      <div class="marker-arrow" style="transform:rotate(${rotation}deg); background:${color};"></div>
-    </div>
+    <div class="marker-icon-box"><div class="marker-arrow" style="transform:rotate(${rotation}deg); background:${color};"></div></div>
     <div class="marker-label">${escapeHtml(name)}</div>
   </div>`;
 }
 
 function popupHtml(userId, loc){
   const isMe = userId === state.user.id;
-  const name = isMe ? 'You' : (state.members.get(userId)?.display_name || 'Member');
+  const m = state.members.get(userId);
+  const name = isMe ? 'You' : (m?.display_name || 'Member');
   const dist = isMe ? null : distanceFromMe(loc);
   return `<div class="popup-name">${escapeHtml(name)}</div>
     <div class="popup-row">Speed: ${formatSpeed(loc.speed)}</div>
     <div class="popup-row">Heading: ${loc.heading != null ? Math.round(loc.heading) + '°' : '—'}</div>
     ${dist != null ? `<div class="popup-row">Distance: ${formatDistance(dist)}</div>` : ''}
+    ${m?.blood_group ? `<div class="popup-row">Blood group: ${escapeHtml(m.blood_group)}</div>` : ''}
     <div class="popup-row">Updated: ${formatRelativeTime(loc.updated_at)}</div>`;
 }
 
@@ -1553,14 +1880,7 @@ function upsertMemberMarker(userId, loc){
   if (loc.lat == null || loc.lng == null) return;
   state.locations.set(userId, loc);
   let marker = state.markers.get(userId);
-  // iconAnchor points at the CENTER of .marker-icon-box (24x24, sitting
-  // at the very top of the wrap with no offset above it), not at the
-  // label underneath — this is what makes the marker sit exactly on
-  // the real GPS coordinate instead of appearing to float above it.
-  const icon = L.divIcon({
-    html: markerHtml(userId, loc), className: '', iconSize: [40, 50],
-    iconAnchor: [20, 12], popupAnchor: [0, -12]
-  });
+  const icon = L.divIcon({ html: markerHtml(userId, loc), className: '', iconSize: [40, 50], iconAnchor: [20, 12], popupAnchor: [0, -12] });
   if (!marker) {
     marker = L.marker([loc.lat, loc.lng], { icon }).addTo(state.map);
     state.markers.set(userId, marker);
@@ -1571,26 +1891,14 @@ function upsertMemberMarker(userId, loc){
   }
   marker.bindPopup(popupHtml(userId, loc));
 }
-
-function refreshAllMarkers(){
-  state.locations.forEach((loc, userId) => upsertMemberMarker(userId, loc));
-}
-
+function refreshAllMarkers(){ state.locations.forEach((loc, userId) => upsertMemberMarker(userId, loc)); }
 function removeMarker(userId){
   const marker = state.markers.get(userId);
   if (marker) { state.map.removeLayer(marker); state.markers.delete(userId); }
   state.locations.delete(userId);
 }
-
-function clearMapMarkers(){
-  state.markers.forEach(m => state.map.removeLayer(m));
-  state.markers.clear();
-}
-
-function distanceFromMe(loc){
-  if (!state.myLocation) return null;
-  return haversineMeters(state.myLocation.lat, state.myLocation.lng, loc.lat, loc.lng);
-}
+function clearMapMarkers(){ state.markers.forEach(m => state.map.removeLayer(m)); state.markers.clear(); }
+function distanceFromMe(loc){ if (!state.myLocation) return null; return haversineMeters(state.myLocation.lat, state.myLocation.lng, loc.lat, loc.lng); }
 
 $('#recenter-btn').addEventListener('click', () => {
   if (state.myLocation) state.map.flyTo([state.myLocation.lat, state.myLocation.lng], Math.max(state.map.getZoom(), 15));
@@ -1598,7 +1906,7 @@ $('#recenter-btn').addEventListener('click', () => {
 });
 
 /* ============================================================
-   11. MEMBER LIST (drawer)
+   12. MEMBER LIST (roster drawer)
    ============================================================ */
 function renderMemberList(){
   const list = $('#member-list');
@@ -1611,14 +1919,20 @@ function renderMemberList(){
     return (a[1].display_name || '').localeCompare(b[1].display_name || '');
   });
 
+  const ownerView = isOwner();
+
   list.innerHTML = entries.map(([userId, m]) => {
     const isMe = userId === state.user.id;
     const loc = state.locations.get(userId);
     const online = isMe ? true : m.online;
     const talking = state.talking.has(userId);
-    const dist = (!isMe && loc) ? distanceFromMe(loc) : null;
-    const locatable = !!loc;
-    return `<div class="member-card ${talking ? 'talking' : ''} ${locatable ? 'locatable' : ''}" data-user-id="${escapeHtml(userId)}" role="button" tabindex="0" title="${locatable ? 'Show on map' : 'No location yet'}">
+    const sharingHidden = isMe ? !locationSharingAllowedLocally() : (m.location_sharing_enabled === false);
+    const dist = (!isMe && loc && !sharingHidden) ? distanceFromMe(loc) : null;
+    const locatable = !!loc && !sharingHidden;
+    const metaBits = [];
+    if (m.blood_group) metaBits.push(`🩸 ${escapeHtml(m.blood_group)}`);
+    if (m.mobile_number) metaBits.push(`📞 ${escapeHtml(m.mobile_number)}`);
+    return `<div class="member-card ${talking ? 'talking' : ''} ${locatable ? 'locatable' : ''}" data-user-id="${escapeHtml(userId)}" role="button" tabindex="0" title="${locatable ? 'Show on map' : 'No location to show'}">
       <div class="member-chan" style="--chan-color:${colorForUser(userId)}">CH${String(m.channel_no ?? '-').padStart(2,'0')}</div>
       <div class="member-main">
         <div class="member-name-row">
@@ -1628,12 +1942,14 @@ function renderMemberList(){
           ${talking ? '<span class="member-tag" style="color:var(--accent)">TALKING</span>' : ''}
         </div>
         <div class="member-stats">
-          <span>SPD <b>${loc ? formatSpeed(loc.speed) : '—'}</b></span>
-          ${!isMe ? `<span>DIST <b>${formatDistance(dist)}</b></span>` : ''}
+          <span>SPD <b>${(loc && !sharingHidden) ? formatSpeed(loc.speed) : '—'}</b></span>
+          ${!isMe ? `<span>DIST <b>${sharingHidden ? 'hidden' : formatDistance(dist)}</b></span>` : ''}
         </div>
-        <div class="member-updated">${online ? 'Online' : 'Offline'} · ${loc ? formatRelativeTime(loc.updated_at) : 'no data'}</div>
+        <div class="member-updated">${online ? 'Online' : 'Offline'} · ${sharingHidden ? 'location hidden' : (loc ? formatRelativeTime(loc.updated_at) : 'no data')}</div>
+        ${metaBits.length ? `<div class="member-meta">${metaBits.join(' · ')}</div>` : ''}
       </div>
       ${locatable ? '<span class="member-locate">📍</span>' : ''}
+      ${(ownerView && !isMe) ? `<button class="member-remove" data-remove-user="${escapeHtml(userId)}" title="Remove from convoy">✕</button>` : ''}
     </div>`;
   }).join('');
 }
@@ -1642,7 +1958,6 @@ function startTicker(){
   stopTicker();
   state.tickerTimer = setInterval(() => {
     renderMemberList();
-    // Downgrade visual status if no update for too long even if presence hasn't caught up
     let changed = false;
     state.locations.forEach((loc, userId) => {
       if (userId === state.user.id) return;
@@ -1657,7 +1972,7 @@ function startTicker(){
 function stopTicker(){ if (state.tickerTimer) { clearInterval(state.tickerTimer); state.tickerTimer = null; } }
 
 /* ============================================================
-   12. HEARTBEAT — keep last_seen fresh, resilient to drops
+   13. HEARTBEAT + SELF-HEALING HEALTH CHECK
    ============================================================ */
 function startHeartbeat(){
   stopHeartbeat();
@@ -1671,40 +1986,29 @@ function startHeartbeat(){
 }
 function stopHeartbeat(){ if (state.heartbeatTimer) { clearInterval(state.heartbeatTimer); state.heartbeatTimer = null; } }
 
-/* ============================================================
-   12b. SELF-HEALING HEALTH CHECK
-   ------------------------------------------------------------
-   Runs independently of any browser event so degraded mic tracks,
-   stuck peer connections, or a dead realtime socket get fixed on
-   their own instead of requiring a manual page refresh.
-   ============================================================ */
 function startHealthCheck(){
   stopHealthCheck();
   state.healthCheckTimer = setInterval(() => {
     if (!state.convoy || !navigator.onLine) return;
     checkMicHealth();
     checkPeerHealth();
-    if (!state.channel || ['closed', 'errored'].includes(state.channel.state)) {
-      reconnectRealtime();
-    }
+    if (!state.channel || ['closed', 'errored'].includes(state.channel.state)) reconnectRealtime();
   }, 20000);
 }
 function stopHealthCheck(){ if (state.healthCheckTimer) { clearInterval(state.healthCheckTimer); state.healthCheckTimer = null; } }
 
 /* ============================================================
-   13. DRAWER (roster panel)
+   14. DRAWER (roster + settings panel)
    ============================================================ */
-function openDrawer(){ $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
+function openDrawer(){ renderOwnerSettingsPanel(); renderMySharingToggle(); $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
 function closeDrawer(){ $('#drawer').classList.remove('open'); $('#drawer-backdrop').classList.remove('open'); }
 $('#roster-btn').addEventListener('click', openDrawer);
 $('#drawer-close').addEventListener('click', closeDrawer);
 $('#drawer-backdrop').addEventListener('click', closeDrawer);
 
-// Tapping a member's card (name, avatar, or row) centers the map on
-// their last known position and opens their info popup.
 function focusOnMember(userId){
   const loc = state.locations.get(userId);
-  if (!loc) { showToast('No location yet for this member.'); return; }
+  if (!loc) { showToast('No location to show for this member.'); return; }
   closeDrawer();
   const targetZoom = Math.max(state.map.getZoom(), 16);
   state.map.flyTo([loc.lat, loc.lng], targetZoom, { duration: 0.6 });
@@ -1712,6 +2016,8 @@ function focusOnMember(userId){
   if (marker) marker.openPopup();
 }
 $('#member-list').addEventListener('click', (e) => {
+  const removeBtn = e.target.closest('.member-remove');
+  if (removeBtn) { e.stopPropagation(); removeMember(removeBtn.dataset.removeUser); return; }
   const card = e.target.closest('.member-card');
   if (!card || !card.dataset.userId) return;
   focusOnMember(card.dataset.userId);
@@ -1725,25 +2031,29 @@ $('#member-list').addEventListener('keydown', (e) => {
 });
 
 /* ============================================================
-   14. DARK / LIGHT MODE
+   15. DARK / LIGHT MODE
    ============================================================ */
 function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
   localStorage.setItem('convoy_intercom_theme', theme);
-  $('#theme-btn').textContent = theme === 'dark' ? '◐' : '◑';
+  const icon = theme === 'dark' ? '◐' : '◑';
+  $('#theme-btn').textContent = icon;
+  $('#theme-btn-convoys').textContent = icon;
 }
 (function initTheme(){
   const saved = localStorage.getItem('convoy_intercom_theme');
   const preferred = saved || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
   applyTheme(preferred);
 })();
-$('#theme-btn').addEventListener('click', () => {
+function toggleTheme(){
   const current = document.documentElement.getAttribute('data-theme');
   applyTheme(current === 'dark' ? 'light' : 'dark');
-});
+}
+$('#theme-btn').addEventListener('click', toggleTheme);
+$('#theme-btn-convoys').addEventListener('click', toggleTheme);
 
 /* ============================================================
-   15. PWA — manifest, install prompt, best-effort service worker
+   16. PWA — manifest, install prompt, best-effort service worker
    ============================================================ */
 (function setupManifest(){
   const iconSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'>
@@ -1753,18 +2063,9 @@ $('#theme-btn').addEventListener('click', () => {
   </svg>`;
   const iconDataUri = 'data:image/svg+xml,' + encodeURIComponent(iconSvg);
   const manifest = {
-    name: 'Convoy Intercom',
-    short_name: 'Convoy',
-    description: 'Live convoy GPS tracking and push-to-talk voice.',
-    start_url: '.',
-    scope: '.',
-    display: 'standalone',
-    background_color: '#0b0e11',
-    theme_color: '#0b0e11',
-    icons: [
-      { src: iconDataUri, sizes: '192x192', type: 'image/svg+xml' },
-      { src: iconDataUri, sizes: '512x512', type: 'image/svg+xml' }
-    ]
+    name: 'Convoy Intercom', short_name: 'Convoy', description: 'Live convoy GPS tracking and push-to-talk voice.',
+    start_url: '.', scope: '.', display: 'standalone', background_color: '#0b0e11', theme_color: '#0b0e11',
+    icons: [{ src: iconDataUri, sizes: '192x192', type: 'image/svg+xml' }, { src: iconDataUri, sizes: '512x512', type: 'image/svg+xml' }]
   };
   const blob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
   $('#manifest-link').setAttribute('href', URL.createObjectURL(blob));
@@ -1784,33 +2085,24 @@ $('#install-btn').addEventListener('click', async () => {
 });
 window.addEventListener('appinstalled', () => { $('#install-btn').classList.add('hidden'); });
 
-// Best-effort service worker for installability signals on browsers that allow blob-based registration.
-// NOTE: most browsers block registering a ServiceWorker from a blob: URL for security reasons, so this
-// is wrapped defensively and the app works fully without it. For full offline caching + guaranteed
-// install prompts, add a real sw.js file alongside index.html (see SETUP_INSTRUCTIONS.md, optional).
 if ('serviceWorker' in navigator) {
   const swCode = `
     self.addEventListener('install', () => self.skipWaiting());
     self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
-    self.addEventListener('fetch', () => {}); // network passthrough
+    self.addEventListener('fetch', () => {});
   `;
   try {
     const swBlob = new Blob([swCode], { type: 'application/javascript' });
-    const swUrl = URL.createObjectURL(swBlob);
-    navigator.serviceWorker.register(swUrl).catch(() => { /* silently ignore unsupported blob SW */ });
-  } catch (e) { /* ignore */ }
+    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(() => {});
+  } catch (e) {}
 }
 
 /* ============================================================
-   16. NETWORK RESILIENCE — auto-reconnect
+   17. NETWORK RESILIENCE — auto-reconnect
    ============================================================ */
 window.addEventListener('online', () => {
   showToast('Back online — reconnecting…');
-  if (state.convoy) {
-    reconnectRealtime();
-    if (state.watchId == null) startLocationTracking();
-    checkMicHealth();
-  }
+  if (state.convoy) { reconnectRealtime(); if (state.watchId == null) startLocationTracking(); checkMicHealth(); }
 });
 window.addEventListener('offline', () => {
   setConnDot(false);
@@ -1819,27 +2111,23 @@ window.addEventListener('offline', () => {
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.convoy) {
     if (state.watchId == null) startLocationTracking();
-    if (!state.channel || state.channel.state !== 'joined') {
-      reconnectRealtime();
-    } else {
-      checkPeerHealth();
-    }
+    if (!state.channel || state.channel.state !== 'joined') reconnectRealtime();
+    else checkPeerHealth();
     checkMicHealth();
     unlockAudioPlayback();
   }
 });
 
 /* ============================================================
-   17. BOOTSTRAP
+   18. BOOTSTRAP
    ============================================================ */
 (async function bootstrap(){
   if (!supabaseClient) {
     const msg = $('#auth-msg');
-    msg.dataset.persist = '1'; // survives tab switches, since this needs fixing before anything else works
+    msg.dataset.persist = '1';
     setFormMsg('#auth-msg',
       'Setup needed: open index.html and paste your real Supabase URL and anon key at the top of the <script> section (see SETUP_INSTRUCTIONS.md). ' +
-      (supabaseInitError ? `Detail: ${supabaseInitError}` : ''),
-      'error');
+      (supabaseInitError ? `Detail: ${supabaseInitError}` : ''), 'error');
     showScreen('auth');
     return;
   }
@@ -1848,8 +2136,8 @@ document.addEventListener('visibilitychange', () => {
     state.session = session;
     state.user = session.user;
     const { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', session.user.id).maybeSingle();
-    state.profile = profile || { id: session.user.id, display_name: session.user.email.split('@')[0] };
-    $('#welcome-name').textContent = `Hi, ${state.profile.display_name}`;
+    state.profile = profile || { id: session.user.id, full_name: session.user.email.split('@')[0], email: session.user.email, location_sharing_enabled: true };
+    $('#welcome-name').textContent = `Hi, ${state.profile.full_name}`;
     await afterAuthSuccess();
   } else {
     showScreen('auth');
