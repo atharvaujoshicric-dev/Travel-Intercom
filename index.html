@@ -229,8 +229,13 @@ button{ cursor:pointer; }
   display:flex; gap:10px; align-items:flex-start;
   padding:12px 10px; border-radius:var(--radius-sm); margin-bottom:6px;
   border:1px solid transparent;
+  transition:background .12s, border-color .12s;
 }
+.member-card.locatable{ cursor:pointer; }
+.member-card.locatable:hover{ background:var(--bg-elev-2); }
+.member-card.locatable:active{ transform:scale(.99); }
 .member-card.talking{ border-color:var(--accent); background:rgba(255,159,28,.06); }
+.member-locate{ flex:none; align-self:center; opacity:.55; font-size:13px; }
 .member-chan{
   font-family:var(--font-mono); font-size:11px; font-weight:700; color:#1a1200;
   background:var(--chan-color, var(--accent-2)); width:38px; height:22px; border-radius:5px;
@@ -297,11 +302,16 @@ button{ cursor:pointer; }
 
 /* Leaflet marker styling */
 .marker-wrap{ display:flex; flex-direction:column; align-items:center; pointer-events:none; }
+/* Fixed-size box so the true GPS point always lands on its exact
+   center, regardless of whether we're rendering a heading arrow
+   (22px) or a plain dot (16px) inside it — this is what the
+   iconAnchor below is measured against. */
+.marker-icon-box{ width:24px; height:24px; display:flex; align-items:center; justify-content:center; }
 .marker-arrow{
   width:22px; height:22px; clip-path: polygon(50% 0%, 85% 90%, 50% 68%, 15% 90%);
   box-shadow:0 0 0 2px rgba(0,0,0,.35);
 }
-.marker-wrap.no-heading .marker-arrow{ clip-path:none; border-radius:50%; width:16px; height:16px; }
+.marker-wrap.no-heading .marker-arrow{ clip-path:none; border-radius:50%; width:14px; height:14px; }
 .marker-wrap.marker-offline .marker-arrow{ background:var(--offline) !important; opacity:.6; }
 .marker-wrap.marker-talking .marker-arrow{ box-shadow:0 0 0 5px rgba(255,159,28,.45); }
 .marker-label{
@@ -498,16 +508,73 @@ const ICE_SERVERS = [
 ];
 
 /* ============================================================
-   2. SUPABASE CLIENT
+   1b. UI WIRING THAT MUST NEVER DEPEND ON SUPABASE
+   ------------------------------------------------------------
+   Tab switching and dark-mode toggling are pure UI and must keep
+   working even if Supabase fails to initialize below (e.g. the
+   credentials above are still placeholders). Wiring these up
+   first, before anything that can throw, guarantees the Sign up
+   / Log in tabs are always clickable.
    ============================================================ */
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    storage: window.localStorage,
-    storageKey: 'convoy-intercom-auth'
+function $(sel){ return document.querySelector(sel); }
+function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
+
+$all('[data-auth-tab]').forEach(btn => btn.addEventListener('click', () => {
+  $all('[data-auth-tab]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const tab = btn.dataset.authTab;
+  $('#login-form').classList.toggle('hidden', tab !== 'login');
+  $('#signup-form').classList.toggle('hidden', tab !== 'signup');
+  const msg = $('#auth-msg');
+  if (!msg.dataset.persist) { msg.textContent = ''; msg.classList.remove('show'); }
+}));
+
+$all('[data-convoy-tab]').forEach(btn => btn.addEventListener('click', () => {
+  $all('[data-convoy-tab]').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const tab = btn.dataset.convoyTab;
+  $('#join-form').classList.toggle('hidden', tab !== 'join');
+  $('#create-form').classList.toggle('hidden', tab !== 'create');
+  const msg = $('#convoy-msg');
+  msg.textContent = ''; msg.classList.remove('show');
+}));
+
+/* ============================================================
+   2. SUPABASE CLIENT
+   ------------------------------------------------------------
+   Wrapped in try/catch: an invalid or still-placeholder URL/key
+   throws synchronously inside createClient(), which — if left
+   unguarded — would halt the entire script and silently break
+   every button below it. If this fails, supabaseClient stays
+   null and every Supabase-dependent action shows a clear error
+   instead of the page appearing "stuck".
+   ============================================================ */
+let supabaseClient = null;
+let supabaseInitError = null;
+try {
+  const credentialsArePlaceholders =
+    SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
+  if (credentialsArePlaceholders) {
+    throw new Error('Supabase credentials have not been set yet.');
   }
-});
+  supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storage: window.localStorage,
+      storageKey: 'convoy-intercom-auth'
+    }
+  });
+} catch (err) {
+  supabaseInitError = err.message || String(err);
+  console.error('Supabase failed to initialize:', err);
+}
+
+function requireSupabase(msgElId){
+  if (supabaseClient) return true;
+  setFormMsg(msgElId, 'Setup needed: open index.html and paste your real Supabase URL and anon key at the top of the <script> section (see SETUP_INSTRUCTIONS.md).', 'error');
+  return false;
+}
 
 /* ============================================================
    3. APP STATE
@@ -535,15 +602,13 @@ const state = {
   deferredInstallPrompt: null,
   heartbeatTimer: null,
   tickerTimer: null,
+  healthCheckTimer: null,
   channelNoCounter: 0
 };
 
 /* ============================================================
    4. UTILITIES
    ============================================================ */
-function $(sel){ return document.querySelector(sel); }
-function $all(sel){ return Array.from(document.querySelectorAll(sel)); }
-
 function escapeHtml(str){
   return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
@@ -633,18 +698,14 @@ function setFormMsg(elId, text, type){
 
 /* ============================================================
    5. AUTH
+   ------------------------------------------------------------
+   Note: the Sign up / Log in tab-switch listeners are wired up
+   earlier in section 1b, before Supabase initialization, so they
+   keep working even if Supabase isn't configured yet.
    ============================================================ */
-$all('[data-auth-tab]').forEach(btn => btn.addEventListener('click', () => {
-  $all('[data-auth-tab]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const tab = btn.dataset.authTab;
-  $('#login-form').classList.toggle('hidden', tab !== 'login');
-  $('#signup-form').classList.toggle('hidden', tab !== 'signup');
-  setFormMsg('#auth-msg', '');
-}));
-
 $('#login-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireSupabase('#auth-msg')) return;
   setFormMsg('#auth-msg', '');
   const email = $('#login-email').value.trim();
   const password = $('#login-password').value;
@@ -659,6 +720,7 @@ $('#login-form').addEventListener('submit', async (e) => {
 
 $('#signup-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireSupabase('#auth-msg')) return;
   setFormMsg('#auth-msg', '');
   const displayName = $('#signup-name').value.trim();
   const email = $('#signup-email').value.trim();
@@ -681,6 +743,7 @@ $('#signup-form').addEventListener('submit', async (e) => {
 });
 
 $('#signout-btn').addEventListener('click', async () => {
+  if (!supabaseClient) { location.reload(); return; }
   await supabaseClient.auth.signOut();
   location.reload();
 });
@@ -717,24 +780,21 @@ async function afterAuthSuccess(){
   showScreen('convoy');
 }
 
-supabaseClient.auth.onAuthStateChange((event) => {
-  if (event === 'SIGNED_OUT') showScreen('auth');
-});
+if (supabaseClient) {
+  supabaseClient.auth.onAuthStateChange((event) => {
+    if (event === 'SIGNED_OUT') showScreen('auth');
+  });
+}
 
 /* ============================================================
    6. CONVOY — create / join / leave
+   ------------------------------------------------------------
+   Note: the Join / Create tab-switch listeners are wired up
+   earlier in section 1b, before Supabase initialization.
    ============================================================ */
-$all('[data-convoy-tab]').forEach(btn => btn.addEventListener('click', () => {
-  $all('[data-convoy-tab]').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  const tab = btn.dataset.convoyTab;
-  $('#join-form').classList.toggle('hidden', tab !== 'join');
-  $('#create-form').classList.toggle('hidden', tab !== 'create');
-  setFormMsg('#convoy-msg', '');
-}));
-
 $('#create-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireSupabase('#convoy-msg')) return;
   setFormMsg('#convoy-msg', '');
   const name = $('#create-name').value.trim();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -765,6 +825,7 @@ $('#create-form').addEventListener('submit', async (e) => {
 
 $('#join-form').addEventListener('submit', async (e) => {
   e.preventDefault();
+  if (!requireSupabase('#convoy-msg')) return;
   setFormMsg('#convoy-msg', '');
   const code = $('#join-code').value.trim().toUpperCase();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -806,6 +867,7 @@ async function enterConvoy(convoy){
   subscribeRealtime();
   startHeartbeat();
   startTicker();
+  startHealthCheck();
   requestGeolocationAndStart();
   ensureMicAccess(); // proactive — kept muted until PTT is pressed
 }
@@ -843,6 +905,7 @@ async function leaveConvoy(){
     stopLocationTracking();
     stopHeartbeat();
     stopTicker();
+    stopHealthCheck();
     if (state.channel) { await supabaseClient.removeChannel(state.channel); state.channel = null; }
 
     await supabaseClient.from('locations').delete().eq('convoy_id', state.convoy.id).eq('user_id', state.user.id);
@@ -899,10 +962,33 @@ function subscribeRealtime(){
     setConnDot(status === 'SUBSCRIBED');
     if (status === 'SUBSCRIBED') {
       await channel.track({ user_id: state.user.id, display_name: state.profile.display_name, online_at: Date.now() });
+    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+      scheduleRealtimeReconnect();
     }
   });
 
   state.channel = channel;
+}
+
+// Debounced so a burst of error/timeout callbacks only triggers one reconnect attempt.
+let realtimeReconnectTimer = null;
+function scheduleRealtimeReconnect(){
+  if (realtimeReconnectTimer) return;
+  realtimeReconnectTimer = setTimeout(() => {
+    realtimeReconnectTimer = null;
+    if (state.convoy && navigator.onLine) reconnectRealtime();
+  }, 3000);
+}
+
+// Full reconnect: fresh realtime channel + fresh WebRTC connections.
+// A network path change (wifi <-> cellular, VPN toggling, sleep/wake)
+// can silently invalidate the old ICE candidates even though nothing
+// in the UI shows an obvious error, which is what previously required
+// a manual page refresh to fix.
+function reconnectRealtime(){
+  if (state.channel) { supabaseClient.removeChannel(state.channel); state.channel = null; }
+  resetAllPeerConnections();
+  subscribeRealtime();
 }
 
 function setConnDot(online){
@@ -932,7 +1018,7 @@ function markOnline(userId, online){
   if (m) m.online = online;
   if (!online) {
     const entry = state.peers.get(userId);
-    if (entry) { entry.pc.close(); state.peers.delete(userId); }
+    if (entry) { clearReconnectTimer(entry); entry.pc.close(); state.peers.delete(userId); }
     const audioEl = document.getElementById('audio-' + userId);
     if (audioEl) audioEl.remove();
   }
@@ -1006,6 +1092,12 @@ function renderTalkingStrip(){
 
 /* ============================================================
    8. WEBRTC — mesh voice (push-to-talk)
+   ------------------------------------------------------------
+   Includes "perfect negotiation" (polite/impolite roles) to avoid
+   silent glare failures, ICE candidate queueing for out-of-order
+   signaling, automatic ICE restart + connection recreation when a
+   link degrades, and mic-track health checks — together these
+   are what previously required a manual page refresh to fix.
    ============================================================ */
 async function ensureMicAccess(){
   if (state.localStream || state.micRequested) return state.localStream != null;
@@ -1014,26 +1106,67 @@ async function ensureMicAccess(){
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
     });
-    stream.getAudioTracks().forEach(t => { t.enabled = false; }); // muted until PTT held
+    stream.getAudioTracks().forEach(t => {
+      t.enabled = false; // muted until PTT held
+      t.addEventListener('ended', handleMicTrackEnded);
+    });
     state.localStream = stream;
-    state.peers.forEach(({ pc }) => stream.getTracks().forEach(t => pc.addTrack(t, stream)));
+    attachLocalStreamToAllPeers();
     $('#ptt-btn').classList.remove('disabled');
     return true;
   } catch (err) {
+    state.micRequested = false;
     $('#ptt-btn').classList.add('disabled');
     showToast('Microphone permission is required for push-to-talk. Enable it in your browser settings.', 'error');
     return false;
   }
 }
 
+// Mobile browsers can silently end the mic track after the tab is
+// backgrounded / the screen locks for a while. Without this handler
+// the local sender keeps referencing a dead track forever and voice
+// stays broken until a manual refresh.
+function handleMicTrackEnded(){
+  if (!state.localStream) return;
+  showToast('Microphone was disconnected — reconnecting…', 'error');
+  state.localStream.getTracks().forEach(t => t.stop());
+  state.localStream = null;
+  state.micRequested = false;
+  pttActive = false;
+  $('#ptt-btn').classList.remove('active');
+  ensureMicAccess();
+}
+
+// Attaches (or re-attaches, via replaceTrack) the current local
+// audio track to every peer. Using replaceTrack on an existing
+// sender — instead of addTrack again — keeps exactly one audio
+// sender per connection even across repeated mic reconnects.
+function attachLocalStreamToAllPeers(){
+  if (!state.localStream) return;
+  const track = state.localStream.getAudioTracks()[0];
+  if (!track) return;
+  state.peers.forEach(entry => {
+    if (entry.audioSender) {
+      entry.audioSender.replaceTrack(track).catch(err => console.warn('replaceTrack failed', err));
+    } else {
+      entry.audioSender = entry.pc.addTrack(track, state.localStream);
+    }
+  });
+}
+
 function getOrCreatePeer(peerId){
   if (state.peers.has(peerId)) return state.peers.get(peerId);
+  const polite = state.user.id > peerId; // deterministic role: higher id yields on glare
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-  const entry = { pc };
+  const entry = {
+    pc, polite, makingOffer: false, ignoreOffer: false,
+    pendingCandidates: [], audioSender: null, reconnectTimer: null
+  };
   state.peers.set(peerId, entry);
 
   if (state.localStream) {
-    state.localStream.getTracks().forEach(t => pc.addTrack(t, state.localStream));
+    const track = state.localStream.getAudioTracks()[0];
+    if (track) entry.audioSender = pc.addTrack(track, state.localStream);
   }
 
   pc.onicecandidate = (e) => {
@@ -1050,29 +1183,74 @@ function getOrCreatePeer(peerId){
       document.body.appendChild(audioEl);
     }
     audioEl.srcObject = e.streams[0];
+    audioEl.play().catch(() => { /* resolved on next user gesture via unlockAudioPlayback() */ });
   };
 
   pc.onnegotiationneeded = async () => {
     try {
+      entry.makingOffer = true;
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
       sendSignal(peerId, { type: 'offer', sdp: pc.localDescription });
     } catch (err) { console.warn('negotiation failed', err); }
+    finally { entry.makingOffer = false; }
+  };
+
+  pc.oniceconnectionstatechange = () => {
+    const s = pc.iceConnectionState;
+    if (s === 'connected' || s === 'completed') {
+      clearReconnectTimer(entry);
+    } else if (s === 'failed') {
+      try { pc.restartIce(); } catch (e) { /* not supported in this browser */ }
+      scheduleConnectionHealthCheck(peerId, 1500);
+    } else if (s === 'disconnected') {
+      scheduleConnectionHealthCheck(peerId, 6000);
+    }
   };
 
   pc.onconnectionstatechange = () => {
-    if (['failed', 'closed'].includes(pc.connectionState)) {
-      state.peers.delete(peerId);
-      const audioEl = document.getElementById('audio-' + peerId);
-      if (audioEl) audioEl.remove();
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+      scheduleConnectionHealthCheck(peerId, 1000);
     }
   };
 
   return entry;
 }
 
-function maybeInitiatePeerConnection(peerId){
-  if (state.peers.has(peerId)) return;
+function clearReconnectTimer(entry){
+  if (entry.reconnectTimer) { clearTimeout(entry.reconnectTimer); entry.reconnectTimer = null; }
+}
+
+// If a connection is still not healthy after `delay`, tear it down
+// and build a fresh one — this is what replaces "refresh the page".
+function scheduleConnectionHealthCheck(peerId, delay){
+  const entry = state.peers.get(peerId);
+  if (!entry || entry.reconnectTimer) return;
+  entry.reconnectTimer = setTimeout(() => {
+    const current = state.peers.get(peerId);
+    if (!current) return;
+    current.reconnectTimer = null;
+    const stillOnline = !!state.channel?.presenceState()[peerId];
+    if (!stillOnline) return; // presence 'leave' handler already cleaned this up
+    const healthy = current.pc.connectionState === 'connected' || current.pc.connectionState === 'connecting';
+    if (!healthy) recreatePeerConnection(peerId);
+  }, delay);
+}
+
+function recreatePeerConnection(peerId){
+  const entry = state.peers.get(peerId);
+  if (entry) {
+    clearReconnectTimer(entry);
+    entry.pc.close();
+    state.peers.delete(peerId);
+  }
+  const audioEl = document.getElementById('audio-' + peerId);
+  if (audioEl) audioEl.remove();
+  maybeInitiatePeerConnection(peerId, true);
+}
+
+function maybeInitiatePeerConnection(peerId, force){
+  if (!force && state.peers.has(peerId)) return;
   // Deterministic initiator: the lexicographically smaller user id starts the offer, avoids glare.
   if (state.user.id < peerId) {
     initiateConnection(peerId);
@@ -1082,46 +1260,104 @@ function maybeInitiatePeerConnection(peerId){
 }
 
 async function initiateConnection(peerId){
-  const { pc } = getOrCreatePeer(peerId);
+  const entry = getOrCreatePeer(peerId);
   try {
-    const offer = await pc.createOffer({ offerToReceiveAudio: true });
-    await pc.setLocalDescription(offer);
-    sendSignal(peerId, { type: 'offer', sdp: pc.localDescription });
+    entry.makingOffer = true;
+    const offer = await entry.pc.createOffer({ offerToReceiveAudio: true });
+    await entry.pc.setLocalDescription(offer);
+    sendSignal(peerId, { type: 'offer', sdp: entry.pc.localDescription });
   } catch (err) { console.warn('offer failed', err); }
+  finally { entry.makingOffer = false; }
 }
 
 function sendSignal(to, payload){
   state.channel?.send({ type: 'broadcast', event: 'signal', payload: { to, from: state.user.id, ...payload } });
 }
 
+async function flushPendingCandidates(entry){
+  const queued = entry.pendingCandidates.splice(0);
+  for (const candidate of queued) {
+    try { await entry.pc.addIceCandidate(candidate); } catch (err) { console.warn('queued ICE candidate failed', err); }
+  }
+}
+
 async function handleSignal(payload){
   if (payload.to !== state.user.id) return;
   const peerId = payload.from;
-  const { pc } = getOrCreatePeer(peerId);
+  const entry = getOrCreatePeer(peerId);
+  const pc = entry.pc;
   try {
     if (payload.type === 'offer') {
+      const offerCollision = entry.makingOffer || pc.signalingState !== 'stable';
+      entry.ignoreOffer = !entry.polite && offerCollision;
+      if (entry.ignoreOffer) return;
       await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+      await flushPendingCandidates(entry);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       sendSignal(peerId, { type: 'answer', sdp: pc.localDescription });
     } else if (payload.type === 'answer') {
-      await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+      if (pc.signalingState === 'have-local-offer') {
+        await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+        await flushPendingCandidates(entry);
+      }
     } else if (payload.type === 'ice') {
-      await pc.addIceCandidate(payload.candidate);
+      if (pc.remoteDescription && pc.remoteDescription.type) {
+        try { await pc.addIceCandidate(payload.candidate); } catch (err) { if (!entry.ignoreOffer) console.warn(err); }
+      } else {
+        entry.pendingCandidates.push(payload.candidate); // remote description not set yet — queue it
+      }
     }
   } catch (err) { console.warn('signal handling failed', err); }
 }
 
-function closeAllPeers(){
-  state.peers.forEach(({ pc }) => pc.close());
+// Tears down every peer connection but keeps the local mic stream
+// alive — used when the realtime/network path changes (e.g. wifi
+// to cellular handover), since the old ICE candidates are no longer
+// valid but the mic itself is still fine.
+function resetAllPeerConnections(){
+  state.peers.forEach(entry => { clearReconnectTimer(entry); entry.pc.close(); });
   state.peers.clear();
   $all('audio[id^="audio-"]').forEach(el => el.remove());
+}
+
+function closeAllPeers(){
+  resetAllPeerConnections();
   if (state.localStream) {
     state.localStream.getTracks().forEach(t => t.stop());
     state.localStream = null;
   }
   state.micRequested = false;
 }
+
+// Periodic self-healing: catches degraded mic tracks or peer
+// connections even if no browser event fires to tell us about it.
+function checkMicHealth(){
+  if (!state.localStream) return;
+  const track = state.localStream.getAudioTracks()[0];
+  if (!track || track.readyState === 'ended') {
+    state.localStream.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+    state.micRequested = false;
+    ensureMicAccess();
+  }
+}
+
+function checkPeerHealth(){
+  state.peers.forEach((entry, peerId) => {
+    if (entry.pc.connectionState === 'failed' || entry.pc.connectionState === 'closed') {
+      recreatePeerConnection(peerId);
+    }
+  });
+}
+
+// Some mobile browsers block autoplay of the very first remote
+// audio element until the user interacts with the page again.
+function unlockAudioPlayback(){
+  $all('audio[id^="audio-"]').forEach(el => { if (el.paused) el.play().catch(() => {}); });
+}
+document.addEventListener('click', unlockAudioPlayback);
+document.addEventListener('touchend', unlockAudioPlayback);
 
 let pttActive = false;
 async function startTalking(){
@@ -1264,7 +1500,9 @@ function markerHtml(userId, loc){
   const rotation = hasHeading ? loc.heading : 0;
   const name = isMe ? 'You' : (state.members.get(userId)?.display_name || 'Member');
   return `<div class="marker-wrap ${hasHeading ? '' : 'no-heading'} ${online ? '' : 'marker-offline'} ${talking ? 'marker-talking' : ''}">
-    <div class="marker-arrow" style="transform:rotate(${rotation}deg); background:${color};"></div>
+    <div class="marker-icon-box">
+      <div class="marker-arrow" style="transform:rotate(${rotation}deg); background:${color};"></div>
+    </div>
     <div class="marker-label">${escapeHtml(name)}</div>
   </div>`;
 }
@@ -1284,7 +1522,14 @@ function upsertMemberMarker(userId, loc){
   if (loc.lat == null || loc.lng == null) return;
   state.locations.set(userId, loc);
   let marker = state.markers.get(userId);
-  const icon = L.divIcon({ html: markerHtml(userId, loc), className: '', iconSize: [40, 50], iconAnchor: [20, 45] });
+  // iconAnchor points at the CENTER of .marker-icon-box (24x24, sitting
+  // at the very top of the wrap with no offset above it), not at the
+  // label underneath — this is what makes the marker sit exactly on
+  // the real GPS coordinate instead of appearing to float above it.
+  const icon = L.divIcon({
+    html: markerHtml(userId, loc), className: '', iconSize: [40, 50],
+    iconAnchor: [20, 12], popupAnchor: [0, -12]
+  });
   if (!marker) {
     marker = L.marker([loc.lat, loc.lng], { icon }).addTo(state.map);
     state.markers.set(userId, marker);
@@ -1341,7 +1586,8 @@ function renderMemberList(){
     const online = isMe ? true : m.online;
     const talking = state.talking.has(userId);
     const dist = (!isMe && loc) ? distanceFromMe(loc) : null;
-    return `<div class="member-card ${talking ? 'talking' : ''}">
+    const locatable = !!loc;
+    return `<div class="member-card ${talking ? 'talking' : ''} ${locatable ? 'locatable' : ''}" data-user-id="${escapeHtml(userId)}" role="button" tabindex="0" title="${locatable ? 'Show on map' : 'No location yet'}">
       <div class="member-chan" style="--chan-color:${colorForUser(userId)}">CH${String(m.channel_no ?? '-').padStart(2,'0')}</div>
       <div class="member-main">
         <div class="member-name-row">
@@ -1356,6 +1602,7 @@ function renderMemberList(){
         </div>
         <div class="member-updated">${online ? 'Online' : 'Offline'} · ${loc ? formatRelativeTime(loc.updated_at) : 'no data'}</div>
       </div>
+      ${locatable ? '<span class="member-locate">📍</span>' : ''}
     </div>`;
   }).join('');
 }
@@ -1394,6 +1641,26 @@ function startHeartbeat(){
 function stopHeartbeat(){ if (state.heartbeatTimer) { clearInterval(state.heartbeatTimer); state.heartbeatTimer = null; } }
 
 /* ============================================================
+   12b. SELF-HEALING HEALTH CHECK
+   ------------------------------------------------------------
+   Runs independently of any browser event so degraded mic tracks,
+   stuck peer connections, or a dead realtime socket get fixed on
+   their own instead of requiring a manual page refresh.
+   ============================================================ */
+function startHealthCheck(){
+  stopHealthCheck();
+  state.healthCheckTimer = setInterval(() => {
+    if (!state.convoy || !navigator.onLine) return;
+    checkMicHealth();
+    checkPeerHealth();
+    if (!state.channel || ['closed', 'errored'].includes(state.channel.state)) {
+      reconnectRealtime();
+    }
+  }, 20000);
+}
+function stopHealthCheck(){ if (state.healthCheckTimer) { clearInterval(state.healthCheckTimer); state.healthCheckTimer = null; } }
+
+/* ============================================================
    13. DRAWER (roster panel)
    ============================================================ */
 function openDrawer(){ $('#drawer').classList.add('open'); $('#drawer-backdrop').classList.add('open'); }
@@ -1401,6 +1668,30 @@ function closeDrawer(){ $('#drawer').classList.remove('open'); $('#drawer-backdr
 $('#roster-btn').addEventListener('click', openDrawer);
 $('#drawer-close').addEventListener('click', closeDrawer);
 $('#drawer-backdrop').addEventListener('click', closeDrawer);
+
+// Tapping a member's card (name, avatar, or row) centers the map on
+// their last known position and opens their info popup.
+function focusOnMember(userId){
+  const loc = state.locations.get(userId);
+  if (!loc) { showToast('No location yet for this member.'); return; }
+  closeDrawer();
+  const targetZoom = Math.max(state.map.getZoom(), 16);
+  state.map.flyTo([loc.lat, loc.lng], targetZoom, { duration: 0.6 });
+  const marker = state.markers.get(userId);
+  if (marker) marker.openPopup();
+}
+$('#member-list').addEventListener('click', (e) => {
+  const card = e.target.closest('.member-card');
+  if (!card || !card.dataset.userId) return;
+  focusOnMember(card.dataset.userId);
+});
+$('#member-list').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const card = e.target.closest('.member-card');
+  if (!card || !card.dataset.userId) return;
+  e.preventDefault();
+  focusOnMember(card.dataset.userId);
+});
 
 /* ============================================================
    14. DARK / LIGHT MODE
@@ -1485,9 +1776,9 @@ if ('serviceWorker' in navigator) {
 window.addEventListener('online', () => {
   showToast('Back online — reconnecting…');
   if (state.convoy) {
-    if (state.channel) supabaseClient.removeChannel(state.channel);
-    subscribeRealtime();
+    reconnectRealtime();
     if (state.watchId == null) startLocationTracking();
+    checkMicHealth();
   }
 });
 window.addEventListener('offline', () => {
@@ -1498,9 +1789,12 @@ document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible' && state.convoy) {
     if (state.watchId == null) startLocationTracking();
     if (!state.channel || state.channel.state !== 'joined') {
-      if (state.channel) supabaseClient.removeChannel(state.channel);
-      subscribeRealtime();
+      reconnectRealtime();
+    } else {
+      checkPeerHealth();
     }
+    checkMicHealth();
+    unlockAudioPlayback();
   }
 });
 
@@ -1508,8 +1802,15 @@ document.addEventListener('visibilitychange', () => {
    17. BOOTSTRAP
    ============================================================ */
 (async function bootstrap(){
-  if (SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY')) {
-    setFormMsg('#auth-msg', 'Missing Supabase credentials — open index.html and paste your project URL and anon key at the top of the <script> section.', 'error');
+  if (!supabaseClient) {
+    const msg = $('#auth-msg');
+    msg.dataset.persist = '1'; // survives tab switches, since this needs fixing before anything else works
+    setFormMsg('#auth-msg',
+      'Setup needed: open index.html and paste your real Supabase URL and anon key at the top of the <script> section (see SETUP_INSTRUCTIONS.md). ' +
+      (supabaseInitError ? `Detail: ${supabaseInitError}` : ''),
+      'error');
+    showScreen('auth');
+    return;
   }
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (session) {
