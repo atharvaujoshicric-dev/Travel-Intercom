@@ -494,8 +494,8 @@ button{ cursor:pointer; }
    >>> PASTE YOUR SUPABASE CREDENTIALS HERE <<<
    Get these from: Supabase Dashboard -> Project Settings -> API
    ============================================================ */
-const SUPABASE_URL = 'https://jbgusipoxybfzzfgikfg.supabase.co';         // e.g. 'https://xxxxxxxxxxxx.supabase.co'
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3U'; // the "anon public" key
+const SUPABASE_URL = 'httpseyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpiZ3VzaXBveHliZnp6Zmdpa2ZnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMxNTM5MjEsImV4cCI6MjA5ODcyOTkyMX0.Buo0xZh9uCMjQxlJpGDI31cak5YD6QGyMUt_DrJqe3Ug.supabase.co';         // e.g. 'https://xxxxxxxxxxxx.supabase.co'
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'; // the "anon public" key
 
 // Tunables
 const LOCATION_MIN_INTERVAL_MS = 3000;   // baseline update cadence (2000-5000ms range required)
@@ -795,6 +795,7 @@ if (supabaseClient) {
 $('#create-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#convoy-msg')) return;
+  primePermissions(); // ask for location + mic immediately, tied to this tap
   setFormMsg('#convoy-msg', '');
   const name = $('#create-name').value.trim();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -818,6 +819,7 @@ $('#create-form').addEventListener('submit', async (e) => {
     await enterConvoy(convoy);
   } catch (err) {
     setFormMsg('#convoy-msg', err.message || 'Failed to create convoy.', 'error');
+    cancelPrimedPermissionsIfNoConvoy();
   } finally {
     submitBtn.disabled = false;
   }
@@ -826,6 +828,7 @@ $('#create-form').addEventListener('submit', async (e) => {
 $('#join-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   if (!requireSupabase('#convoy-msg')) return;
+  primePermissions(); // ask for location + mic immediately, tied to this tap
   setFormMsg('#convoy-msg', '');
   const code = $('#join-code').value.trim().toUpperCase();
   const submitBtn = e.target.querySelector('button[type=submit]');
@@ -848,6 +851,7 @@ $('#join-form').addEventListener('submit', async (e) => {
     await enterConvoy(convoy);
   } catch (err) {
     setFormMsg('#convoy-msg', err.message || 'Failed to join convoy.', 'error');
+    cancelPrimedPermissionsIfNoConvoy();
   } finally {
     submitBtn.disabled = false;
   }
@@ -1410,6 +1414,32 @@ function requestGeolocationAndStart(){
   startLocationTracking();
 }
 
+// Called as the very first thing inside the Create/Join submit
+// handlers — synchronously, before any `await` — so the browser
+// ties the location + microphone permission prompts directly to
+// the user's tap. Some browsers (notably Safari/iOS) only honor
+// getUserMedia()/geolocation requests while the original user
+// gesture is still "fresh"; requesting them only later, after
+// several network awaits deep in the convoy-join flow, can cause
+// the prompt to be silently skipped or blocked. Both underlying
+// calls are idempotent, so this is safe to call again later too.
+function primePermissions(){
+  requestGeolocationAndStart();
+  ensureMicAccess();
+}
+
+// If convoy creation/joining ultimately fails, undo anything we
+// started early so a permission we no longer need doesn't linger.
+function cancelPrimedPermissionsIfNoConvoy(){
+  if (state.convoy) return; // succeeded — keep everything running
+  stopLocationTracking();
+  if (state.localStream) {
+    state.localStream.getTracks().forEach(t => t.stop());
+    state.localStream = null;
+  }
+  state.micRequested = false;
+}
+
 function startLocationTracking(){
   if (state.watchId != null) return;
   state.watchId = navigator.geolocation.watchPosition(onPosition, onPositionError, {
@@ -1422,6 +1452,7 @@ function stopLocationTracking(){
 }
 
 function onPosition(pos){
+  if (!state.convoy) return; // permission was primed before the convoy finished being created/joined — ignore until ready
   hideBanner();
   const { latitude, longitude, heading, speed, accuracy } = pos.coords;
   const now = Date.now();
