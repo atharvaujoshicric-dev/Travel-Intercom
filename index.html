@@ -1861,6 +1861,7 @@ function subscribeRealtime(){
   );
 
   channel.subscribe(async (status) => {
+    console.log(`[voice] realtime channel status: ${status}`);
     setConnDot(status === 'SUBSCRIBED');
     if (status === 'SUBSCRIBED') {
       await channel.track({ user_id: state.user.id, display_name: state.profile.full_name, online_at: Date.now() });
@@ -1892,6 +1893,7 @@ function setConnDot(online){ $('#conn-dot').classList.toggle('offline', !online)
 function handlePresenceSync(){
   const presenceState = state.channel.presenceState();
   const onlineIds = new Set(Object.keys(presenceState));
+  console.log(`[voice] presence sync: ${onlineIds.size} online (${[...onlineIds].join(', ')})`);
   for (const [userId, meta] of state.members.entries()) meta.online = onlineIds.has(userId);
   onlineIds.forEach(peerId => {
     if (peerId === state.user.id) return;
@@ -2035,6 +2037,7 @@ async function ensureMicAccess(){
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
       });
+      console.log('[voice] microphone acquired');
       stream.getAudioTracks().forEach(t => {
         t.enabled = false;
         t.addEventListener('ended', handleMicTrackEnded);
@@ -2047,6 +2050,7 @@ async function ensureMicAccess(){
     } catch (err) {
       state.micRequested = false;
       state.micDenied = true;
+      console.log('[voice] microphone access denied/failed:', err.message);
       showToast('Microphone permission is required for voice. Enable it in your browser settings.', 'error');
       applyVoiceModeUI();
       return false;
@@ -2080,6 +2084,7 @@ function attachLocalStreamToAllPeers(){
 function getOrCreatePeer(peerId){
   if (state.peers.has(peerId)) return state.peers.get(peerId);
   const polite = state.user.id > peerId;
+  console.log(`[voice] creating connection to ${peerId} (polite=${polite}, haveLocalStream=${!!state.localStream})`);
   const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
   const entry = { pc, polite, makingOffer: false, ignoreOffer: false, pendingCandidates: [], audioSender: null, reconnectTimer: null };
   state.peers.set(peerId, entry);
@@ -2092,6 +2097,7 @@ function getOrCreatePeer(peerId){
   pc.onicecandidate = (e) => { if (e.candidate) sendSignal(peerId, { type: 'ice', candidate: e.candidate.toJSON() }); };
 
   pc.ontrack = (e) => {
+    console.log(`[voice] received remote track from ${peerId}`);
     let audioEl = document.getElementById('audio-' + peerId);
     if (!audioEl) {
       audioEl = document.createElement('audio');
@@ -2101,7 +2107,8 @@ function getOrCreatePeer(peerId){
       document.body.appendChild(audioEl);
     }
     audioEl.srcObject = e.streams[0];
-    audioEl.play().catch(() => {});
+    audioEl.play().then(() => console.log(`[voice] playing audio from ${peerId}`))
+      .catch(err => console.log(`[voice] audio.play() blocked for ${peerId} — will retry after next tap/click:`, err.message));
   };
 
   pc.onnegotiationneeded = async () => {
@@ -2109,13 +2116,15 @@ function getOrCreatePeer(peerId){
       entry.makingOffer = true;
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      console.log(`[voice] sending offer to ${peerId}`);
       sendSignal(peerId, { type: 'offer', sdp: pc.localDescription });
-    } catch (err) { console.warn('negotiation failed', err); }
+    } catch (err) { console.warn('[voice] negotiation failed', err); }
     finally { entry.makingOffer = false; }
   };
 
   pc.oniceconnectionstatechange = () => {
     const s = pc.iceConnectionState;
+    console.log(`[voice] ICE state with ${peerId}: ${s}`);
     if (s === 'connected' || s === 'completed') { clearReconnectTimer(entry); state.peerRetryCounts.delete(peerId); }
     else if (s === 'failed') { try { pc.restartIce(); } catch (e) {} scheduleConnectionHealthCheck(peerId, 1500); }
     else if (s === 'disconnected') scheduleConnectionHealthCheck(peerId, 6000);
@@ -2159,23 +2168,21 @@ function recreatePeerConnection(peerId){
 
 function maybeInitiatePeerConnection(peerId, force){
   if (!force && state.peers.has(peerId)) return;
-  if (state.user.id < peerId) initiateConnection(peerId);
-  else getOrCreatePeer(peerId);
-}
-
-async function initiateConnection(peerId){
-  const entry = getOrCreatePeer(peerId);
-  try {
-    entry.makingOffer = true;
-    const offer = await entry.pc.createOffer({ offerToReceiveAudio: true });
-    await entry.pc.setLocalDescription(offer);
-    sendSignal(peerId, { type: 'offer', sdp: entry.pc.localDescription });
-  } catch (err) { console.warn('offer failed', err); }
-  finally { entry.makingOffer = false; }
+  // Just create the connection — onnegotiationneeded (triggered automatically
+  // by addTrack inside getOrCreatePeer, or later by attachLocalStreamToAllPeers
+  // once the mic becomes available) is solely responsible for creating and
+  // sending offers, on BOTH sides. There's no separate "who initiates" step:
+  // polite/impolite roles (below) only matter for resolving glare if both
+  // sides happen to create offers around the same time — they don't gate
+  // whether a side is allowed to initiate at all. Two independent offer
+  // paths for the same connection is exactly the bug this replaces.
+  getOrCreatePeer(peerId);
 }
 
 function sendSignal(to, payload){
-  state.channel?.send({ type: 'broadcast', event: 'signal', payload: { to, from: state.user.id, ...payload } });
+  if (!state.channel) { console.warn('[voice] cannot send signal — no active realtime channel'); return; }
+  state.channel.send({ type: 'broadcast', event: 'signal', payload: { to, from: state.user.id, ...payload } })
+    .then(result => { if (result !== 'ok') console.warn(`[voice] signal send result: ${result}`); });
 }
 
 async function flushPendingCandidates(entry){
@@ -2192,7 +2199,8 @@ async function handleSignal(payload){
     if (payload.type === 'offer') {
       const offerCollision = entry.makingOffer || pc.signalingState !== 'stable';
       entry.ignoreOffer = !entry.polite && offerCollision;
-      if (entry.ignoreOffer) return;
+      if (entry.ignoreOffer) { console.log(`[voice] ignoring colliding offer from ${peerId} (impolite)`); return; }
+      console.log(`[voice] received offer from ${peerId}, answering`);
       await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
       await flushPendingCandidates(entry);
       const answer = await pc.createAnswer();
@@ -2200,6 +2208,7 @@ async function handleSignal(payload){
       sendSignal(peerId, { type: 'answer', sdp: pc.localDescription });
     } else if (payload.type === 'answer') {
       if (pc.signalingState === 'have-local-offer') {
+        console.log(`[voice] received answer from ${peerId}`);
         await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
         await flushPendingCandidates(entry);
       }
@@ -2210,7 +2219,7 @@ async function handleSignal(payload){
         entry.pendingCandidates.push(payload.candidate);
       }
     }
-  } catch (err) { console.warn('signal handling failed', err); }
+  } catch (err) { console.warn('[voice] signal handling failed', err); }
 }
 
 function resetAllPeerConnections(){
@@ -2306,6 +2315,7 @@ async function startTalking(){
   if (!ok) { applyVoiceModeUI(); return; }
   pttActive = true;
   state.localStream.getAudioTracks().forEach(t => { t.enabled = true; });
+  console.log(`[voice] talking started — ${state.peers.size} peer connection(s), track enabled=${state.localStream.getAudioTracks()[0]?.enabled}`);
   broadcastTalking(true);
   applyVoiceModeUI();
 }
