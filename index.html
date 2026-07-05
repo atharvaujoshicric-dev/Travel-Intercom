@@ -296,6 +296,11 @@ button{ cursor:pointer; }
 .member-stats b{ color:var(--text); font-weight:600; }
 .member-updated{ font-size:10.5px; color:var(--muted); margin-top:3px; }
 .member-meta{ font-size:10.5px; color:var(--muted); margin-top:3px; }
+.voice-status{ font-weight:600; }
+.voice-status.voice-ok{ color:var(--online); }
+.voice-status.voice-mid{ color:var(--accent); }
+.voice-status.voice-bad{ color:var(--danger); }
+.voice-status.voice-off{ color:var(--muted); }
 .member-empty{ padding:30px 16px; text-align:center; color:var(--muted); font-size:13px; }
 
 .drawer-foot{ padding:12px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:8px; }
@@ -2128,9 +2133,11 @@ function getOrCreatePeer(peerId){
     if (s === 'connected' || s === 'completed') { clearReconnectTimer(entry); state.peerRetryCounts.delete(peerId); }
     else if (s === 'failed') { try { pc.restartIce(); } catch (e) {} scheduleConnectionHealthCheck(peerId, 1500); }
     else if (s === 'disconnected') scheduleConnectionHealthCheck(peerId, 6000);
+    renderMemberList();
   };
   pc.onconnectionstatechange = () => {
     if (pc.connectionState === 'failed' || pc.connectionState === 'closed') scheduleConnectionHealthCheck(peerId, 1000);
+    renderMemberList();
   };
 
   return entry;
@@ -2569,6 +2576,16 @@ $('#recenter-btn').addEventListener('click', () => {
 /* ============================================================
    12. MEMBER LIST (roster drawer)
    ============================================================ */
+function voiceStatusFor(userId){
+  if (userId === state.user.id) return null;
+  const entry = state.peers.get(userId);
+  if (!entry) return { text: 'no voice link yet', cls: 'voice-off' };
+  const cs = entry.pc.connectionState;
+  if (cs === 'connected') return { text: 'voice ready', cls: 'voice-ok' };
+  if (cs === 'failed' || cs === 'closed') return { text: 'voice failed — see notes', cls: 'voice-bad' };
+  return { text: 'voice connecting…', cls: 'voice-mid' };
+}
+
 function renderMemberList(){
   const list = $('#member-list');
   const entries = Array.from(state.members.entries());
@@ -2591,6 +2608,7 @@ function renderMemberList(){
     const sharingHidden = pending ? true : (isMe ? !locationSharingAllowedLocally() : (m.location_sharing_enabled === false));
     const dist = (!isMe && loc && !sharingHidden) ? distanceFromMe(loc) : null;
     const locatable = !!loc && !sharingHidden;
+    const voiceStatus = (!isMe && !pending && online) ? voiceStatusFor(userId) : null;
     const metaBits = [];
     if (m.blood_group) metaBits.push(`🩸 ${escapeHtml(m.blood_group)}`);
     if (m.mobile_number) metaBits.push(`📞 ${escapeHtml(m.mobile_number)}`);
@@ -2611,6 +2629,7 @@ function renderMemberList(){
           ${!isMe ? `<span>DIST <b>${sharingHidden ? 'hidden' : formatDistance(dist)}</b></span>` : ''}
         </div>
         <div class="member-updated">${online ? 'Online' : 'Offline'} · ${sharingHidden ? 'location hidden' : (loc ? formatRelativeTime(loc.updated_at) : 'no data')}</div>`}
+        ${voiceStatus ? `<div class="member-updated voice-status ${voiceStatus.cls}">🎙 ${voiceStatus.text}</div>` : ''}
         ${metaBits.length ? `<div class="member-meta">${metaBits.join(' · ')}</div>` : ''}
       </div>
       ${locatable ? '<span class="member-locate">📍</span>' : ''}
