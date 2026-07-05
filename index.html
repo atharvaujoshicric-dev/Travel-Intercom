@@ -838,6 +838,50 @@ $all('[data-convoy-tab]').forEach(btn => btn.addEventListener('click', () => {
 }));
 
 /* ============================================================
+   1c. SAFE STORAGE — falls back to in-memory if localStorage throws
+   ------------------------------------------------------------
+   Some browsers (notably Safari in Private Browsing, on some versions)
+   restrict localStorage to effectively zero quota, so any setItem()
+   call throws. Left unguarded, that exception can cascade into
+   confusing failures elsewhere (including during login, since
+   Supabase's client persists the session to storage as part of
+   signing in). This wrapper never throws: it silently falls back to
+   an in-memory store, so the app still works for the current tab —
+   it just won't remember your session/preferences after a reload.
+   ============================================================ */
+const safeStorage = (function(){
+  const memory = {};
+  let works = true;
+  try {
+    const testKey = '__convoy_storage_test__';
+    window.localStorage.setItem(testKey, '1');
+    window.localStorage.removeItem(testKey);
+  } catch (e) {
+    works = false;
+  }
+  let warned = false;
+  function warnOnce(e){
+    if (warned) return;
+    warned = true;
+    console.warn('[storage] localStorage is unavailable (Private Browsing or blocked site data?) — using an in-memory fallback. Your login and preferences will not be remembered after this tab closes.', e);
+  }
+  return {
+    getItem(key){
+      if (works) { try { return window.localStorage.getItem(key); } catch (e) { works = false; warnOnce(e); } }
+      return Object.prototype.hasOwnProperty.call(memory, key) ? memory[key] : null;
+    },
+    setItem(key, value){
+      if (works) { try { window.localStorage.setItem(key, value); return; } catch (e) { works = false; warnOnce(e); } }
+      memory[key] = String(value);
+    },
+    removeItem(key){
+      if (works) { try { window.localStorage.removeItem(key); return; } catch (e) { works = false; warnOnce(e); } }
+      delete memory[key];
+    }
+  };
+})();
+
+/* ============================================================
    2. SUPABASE CLIENT
    ============================================================ */
 let supabaseClient = null;
@@ -847,7 +891,7 @@ try {
     SUPABASE_URL.includes('YOUR_SUPABASE_URL') || SUPABASE_ANON_KEY.includes('YOUR_SUPABASE_ANON_KEY');
   if (credentialsArePlaceholders) throw new Error('Supabase credentials have not been set yet.');
   supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true, storage: window.localStorage, storageKey: 'convoy-intercom-auth' }
+    auth: { persistSession: true, autoRefreshToken: true, storage: safeStorage, storageKey: 'convoy-intercom-auth' }
   });
 } catch (err) {
   supabaseInitError = err.message || String(err);
@@ -1162,7 +1206,7 @@ async function afterAuthSuccess(opts){
     return;
   }
 
-  const savedConvoyId = localStorage.getItem('convoy_intercom_active_convoy_id');
+  const savedConvoyId = safeStorage.getItem('convoy_intercom_active_convoy_id');
   if (savedConvoyId) {
     const { data: membership } = await supabaseClient
       .from('convoy_members').select('convoy_id').eq('convoy_id', savedConvoyId).eq('user_id', state.user.id).maybeSingle();
@@ -1170,7 +1214,7 @@ async function afterAuthSuccess(opts){
       const { data: convoy } = await supabaseClient.from('convoys').select('*').eq('id', savedConvoyId).maybeSingle();
       if (convoy) { await enterConvoy(convoy); return; }
     }
-    localStorage.removeItem('convoy_intercom_active_convoy_id');
+    safeStorage.removeItem('convoy_intercom_active_convoy_id');
   }
   await showConvoysScreen();
 }
@@ -1383,7 +1427,7 @@ async function enterConvoy(convoyStub){
     if (!state.map) initMap();
     await loadInitialMembersAndLocations();
 
-    localStorage.setItem('convoy_intercom_active_convoy_id', freshConvoy.id);
+    safeStorage.setItem('convoy_intercom_active_convoy_id', freshConvoy.id);
     $('#app-convoy-name').textContent = freshConvoy.name;
     $('#app-convoy-code').textContent = `CODE ${freshConvoy.code}`;
     showScreen('app');
@@ -1408,7 +1452,7 @@ async function enterConvoy(convoyStub){
   } catch (err) {
     console.error('enterConvoy failed', err);
     state.convoy = null;
-    localStorage.removeItem('convoy_intercom_active_convoy_id');
+    safeStorage.removeItem('convoy_intercom_active_convoy_id');
     showToast(err.message || 'Failed to open this convoy.', 'error');
     await showConvoysScreen();
   }
@@ -1487,7 +1531,7 @@ async function exitToConvoysScreen(){
   state.members.clear();
   state.locations.clear();
   state.convoy = null;
-  localStorage.removeItem('convoy_intercom_active_convoy_id');
+  safeStorage.removeItem('convoy_intercom_active_convoy_id');
   closeDrawer();
   await showConvoysScreen();
 }
@@ -2765,14 +2809,14 @@ $('#member-list').addEventListener('keydown', (e) => {
    ============================================================ */
 function applyTheme(theme){
   document.documentElement.setAttribute('data-theme', theme);
-  localStorage.setItem('convoy_intercom_theme', theme);
+  safeStorage.setItem('convoy_intercom_theme', theme);
   const icon = theme === 'dark' ? '◐' : '◑';
   $('#theme-btn').textContent = icon;
   $('#theme-btn-convoys').textContent = icon;
 }
 (function initTheme(){
   try {
-    const saved = localStorage.getItem('convoy_intercom_theme');
+    const saved = safeStorage.getItem('convoy_intercom_theme');
     const prefersLight = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-color-scheme: light)').matches;
     applyTheme(saved || (prefersLight ? 'light' : 'dark'));
   } catch (err) {
