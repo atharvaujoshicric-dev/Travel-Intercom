@@ -778,13 +778,19 @@ const HEARTBEAT_MS = 15000;
 // STUN alone works for most home/office/mobile-data networks, but some
 // carrier-grade or symmetric NATs can never establish a direct peer-to-peer
 // connection without a TURN (relay) server — this is the single most common
-// real-world cause of "I can't hear anyone" even though everything else
-// works. If that happens for some of your users, add a TURN server below
-// (e.g. from Twilio, Cloudflare, Metered, or a self-hosted coturn):
-//   { urls: 'turn:your-turn-host:3478', username: '...', credential: '...' }
+// real-world cause of a voice connection stuck on "connecting" forever, or
+// "I can't hear anyone" even though everything else works.
+//
+// A free, no-signup public TURN server (Open Relay Project, run by Metered)
+// is included below so this works out of the box. It's shared/rate-limited,
+// so for a production app with real traffic, get your own free TURN
+// credentials at https://www.metered.ca/tools/openrelay/ (or Cloudflare/
+// Twilio) and swap them in below.
 const ICE_SERVERS = [
-  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }
-  // , { urls: 'turn:your-turn-host:3478', username: 'YOUR_TURN_USERNAME', credential: 'YOUR_TURN_CREDENTIAL' }
+  { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun2.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] },
+  { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+  { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
 ];
 
 /* ============================================================
