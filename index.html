@@ -1856,7 +1856,6 @@ function subscribeRealtime(){
 
   channel.on('broadcast', { event: 'location' }, ({ payload }) => handleLocationUpdate(payload, true));
   channel.on('broadcast', { event: 'talking' }, ({ payload }) => handleTalkingUpdate(payload));
-  channel.on('broadcast', { event: 'signal' }, ({ payload }) => handleSignal(payload));
 
   channel.on('postgres_changes',
     { event: '*', schema: 'public', table: 'convoy_members', filter: `convoy_id=eq.${state.convoy.id}` },
@@ -1870,18 +1869,41 @@ function subscribeRealtime(){
     { event: 'UPDATE', schema: 'public', table: 'convoys', filter: `id=eq.${state.convoy.id}` },
     handleConvoyRowChange
   );
+  // WebRTC signaling (offer/answer/ICE) travels through this table instead
+  // of Realtime Broadcast — see the comment above the table in
+  // supabase_schema.sql for why. This is the same delivery mechanism
+  // already proven reliable for locations/members/convoys above.
+  channel.on('postgres_changes',
+    { event: 'INSERT', schema: 'public', table: 'webrtc_signals', filter: `to_user=eq.${state.user.id}` },
+    (payload) => handleSignalRow(payload.new)
+  );
 
   channel.subscribe(async (status) => {
     console.log(`[voice] realtime channel status: ${status}`);
     setConnDot(status === 'SUBSCRIBED');
     if (status === 'SUBSCRIBED') {
       await channel.track({ user_id: state.user.id, display_name: state.profile.full_name, online_at: Date.now() });
+      fetchQueuedSignals();
     } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
       scheduleRealtimeReconnect();
     }
   });
 
   state.channel = channel;
+}
+
+// Catches any signals sent to us before our subscription was fully live
+// (e.g. the other person's offer arrived in the split second before we
+// finished subscribing). Processed in order, then deleted like any other
+// signal.
+async function fetchQueuedSignals(){
+  if (!state.convoy) return;
+  const { data, error } = await supabaseClient
+    .from('webrtc_signals').select('*')
+    .eq('convoy_id', state.convoy.id).eq('to_user', state.user.id)
+    .order('created_at', { ascending: true });
+  if (error) { console.warn('[voice] failed to fetch queued signals', error); return; }
+  for (const row of data || []) await handleSignalRow(row);
 }
 
 let realtimeReconnectTimer = null;
@@ -2193,9 +2215,14 @@ function maybeInitiatePeerConnection(peerId, force){
 }
 
 function sendSignal(to, payload){
-  if (!state.channel) { console.warn('[voice] cannot send signal — no active realtime channel'); return; }
-  state.channel.send({ type: 'broadcast', event: 'signal', payload: { to, from: state.user.id, ...payload } })
-    .then(result => { if (result !== 'ok') console.warn(`[voice] signal send result: ${result}`); });
+  if (!state.convoy) { console.warn('[voice] cannot send signal — not in a convoy'); return; }
+  const { type, ...rest } = payload; // rest is {sdp} for offer/answer, or {candidate} for ice
+  supabaseClient.from('webrtc_signals').insert({
+    convoy_id: state.convoy.id, from_user: state.user.id, to_user: to, signal_type: type, payload: rest
+  }).then(({ error }) => {
+    if (error) console.warn('[voice] failed to send signal', error);
+    else console.log(`[voice] sent ${type} to ${to}`);
+  });
 }
 
 async function flushPendingCandidates(entry){
@@ -2233,6 +2260,16 @@ async function handleSignal(payload){
       }
     }
   } catch (err) { console.warn('[voice] signal handling failed', err); }
+}
+
+// Reshapes a webrtc_signals table row into the {to, from, type, sdp|candidate}
+// shape handleSignal() expects, processes it, then deletes the row so the
+// table doesn't grow unbounded and it's never reprocessed on reconnect.
+async function handleSignalRow(row){
+  if (!row || row.to_user !== state.user.id) return;
+  await handleSignal({ to: row.to_user, from: row.from_user, type: row.signal_type, ...row.payload });
+  supabaseClient.from('webrtc_signals').delete().eq('id', row.id)
+    .then(({ error }) => { if (error) console.warn('[voice] failed to clean up signal row', error); });
 }
 
 function resetAllPeerConnections(){
