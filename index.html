@@ -773,8 +773,8 @@ input, select, textarea { font-family: inherit; }
 /* ============================================================================
    1. CONFIG — paste your Supabase project credentials here
    ============================================================================ */
-const SUPABASE_URL = "https://kjvcnotidbifaymoeadn.supabase.co";       // e.g. https://xxxxxxxx.supabase.co
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdmNub3RpZGJpZmF5bW9lYWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzM4MzcsImV4cCI6MjA5ODgwOTgzN30.vmOujJP2lxgeSxSlpsPAhBy5jJ74OlTic0lNWvxwV8w"; // the "anon public" API key
+const SUPABASE_URL = "https://kjvcnotidbifaymoeadn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdmNub3RpZGJpZmF5bW9lYWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzM4MzcsImV4cCI6MjA5ODgwOTgzN30.vmOujJP2lxgeSxSlpsPAhBy5jJ74OlTic0lNWvxwV8w";
 
 // IMPORTANT: the whole app used to break silently — with every button on the
 // page completely unresponsive and no visible error — if createClient() threw
@@ -786,14 +786,23 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // and wires up the UI, and a visible banner explains what to fix.
 let supabase = null;
 let SUPABASE_CONFIGURED = true;
+let SUPABASE_CONFIG_ERROR = '';
 try {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY ||
       SUPABASE_URL.includes('PASTE_YOUR_SUPABASE') ||
       SUPABASE_ANON_KEY.includes('PASTE_YOUR_SUPABASE')) {
     throw new Error(
-      'Supabase is not configured yet. Open index.html, find the CONFIG section near the top ' +
+      'PLACEHOLDER: Supabase is not configured yet. Open index.html, find the CONFIG section near the top ' +
       'of the <script> tag, and replace SUPABASE_URL / SUPABASE_ANON_KEY with your project\'s ' +
       'values from Supabase -> Project Settings -> API.'
+    );
+  }
+  if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
+    // This means the Supabase JS SDK <script> tag (cdn.jsdelivr.net) never loaded —
+    // usually a blocked CDN, an ad/script blocker, or no internet connection at load time.
+    throw new Error(
+      'SDK_MISSING: The Supabase code library did not load from cdn.jsdelivr.net. Check your internet ' +
+      'connection, disable any ad-blocker/script-blocker for this page, then reload.'
     );
   }
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -806,6 +815,7 @@ try {
   });
 } catch (err) {
   SUPABASE_CONFIGURED = false;
+  SUPABASE_CONFIG_ERROR = (err.message || '').replace(/^PLACEHOLDER:\s*|^SDK_MISSING:\s*/, '');
   console.error('[Convoy Intercom] Supabase client not initialized:', err.message);
 }
 
@@ -1081,6 +1091,7 @@ window.addEventListener('offline', () => {
    7. AUTH
    ============================================================================ */
 if (!SUPABASE_CONFIGURED) {
+  $('#configWarning').textContent = '⚠ ' + SUPABASE_CONFIG_ERROR;
   $('#configWarning').classList.remove('hidden');
 }
 
@@ -1105,7 +1116,7 @@ $('#formLogin').addEventListener('submit', async (e) => {
   $('#authError').textContent = '';
   setAuthBusy(true);
   try {
-    if (!supabase) throw new Error('Supabase is not configured. See the warning banner above (and SETUP.md, step 5).');
+    if (!supabase) throw new Error(SUPABASE_CONFIG_ERROR || 'Supabase is not configured.');
     const email = $('#loginEmail').value.trim();
     const password = $('#loginPassword').value;
     const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -1123,7 +1134,7 @@ $('#formSignup').addEventListener('submit', async (e) => {
   $('#authError').textContent = '';
   setAuthBusy(true);
   try {
-    if (!supabase) throw new Error('Supabase is not configured. See the warning banner above (and SETUP.md, step 5).');
+    if (!supabase) throw new Error(SUPABASE_CONFIG_ERROR || 'Supabase is not configured.');
     const full_name = $('#suFullName').value.trim();
     const username = $('#suUsername').value.trim();
     const email = $('#suEmail').value.trim();
