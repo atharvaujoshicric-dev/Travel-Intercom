@@ -1,2630 +1,1077 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Convoy Intercom</title>
-<meta name="description" content="Live convoy GPS tracking and push-to-talk intercom for road trips." />
-<meta name="theme-color" content="#0b0e11" />
-<link id="faviconLink" rel="icon" href="" />
-<link id="manifestLink" rel="manifest" href="" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<meta name="apple-mobile-web-app-title" content="Convoy" />
+<meta name="theme-color" content="#0f172a">
 
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
-
+<!-- Leaflet -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- Leaflet Routing Machine (route search/preview) -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+<!-- Supabase JS -->
+<script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 
 <style>
-/* ==========================================================================
-   CONVOY INTERCOM — STYLES
-   Design language: a night-driving instrument cluster. Dark asphalt surfaces,
-   an amber beacon accent for alerts/voice, a teal "go" accent for online
-   status, and dashed lane-marking dividers as the recurring structural motif.
-   ========================================================================== */
+/* ================= THEME ================= */
+:root{
+  --bg:#f3f4f6; --bg2:#ffffff; --text:#111827; --muted:#6b7280; --border:#e5e7eb;
+  --accent:#2563eb; --accent2:#1d4ed8; --danger:#dc2626; --success:#16a34a;
+  --card:#ffffff; --shadow:0 2px 10px rgba(0,0,0,.08);
+}
+[data-theme="dark"]{
+  --bg:#0f172a; --bg2:#111827; --text:#e5e7eb; --muted:#9ca3af; --border:#1f2937;
+  --accent:#3b82f6; --accent2:#2563eb; --danger:#ef4444; --success:#22c55e;
+  --card:#1e293b; --shadow:0 2px 10px rgba(0,0,0,.4);
+}
+*{box-sizing:border-box;}
+html,body{height:100%;margin:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  background:var(--bg); color:var(--text); transition:background .2s,color .2s;
+}
+button{font-family:inherit;cursor:pointer;}
+input,select{font-family:inherit;}
+a{color:var(--accent);}
+.hidden{display:none !important;}
+#app{max-width:520px;margin:0 auto;min-height:100vh;background:var(--bg);position:relative;display:flex;flex-direction:column;}
+@media(min-width:900px){#app{max-width:900px;}}
 
-* { box-sizing: border-box; }
-html, body { height: 100%; }
-body {
-  margin: 0;
-  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  -webkit-tap-highlight-color: transparent;
-  overscroll-behavior-y: none;
+/* ---- top bar ---- */
+.topbar{
+  display:flex;align-items:center;justify-content:space-between;padding:14px 16px;
+  background:var(--bg2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;
 }
-.mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+.topbar h1{font-size:18px;margin:0;font-weight:700;}
+.iconbtn{background:none;border:none;color:var(--text);font-size:20px;padding:6px 8px;border-radius:8px;}
+.iconbtn:hover{background:var(--border);}
 
-:root, html.dark {
-  --bg: #0b0e11;
-  --bg-elevated: #10141a;
-  --surface: #171c22;
-  --surface-2: #1e252c;
-  --border: rgba(255,255,255,0.08);
-  --text: #e8eaed;
-  --text-dim: #8b94a0;
-  --text-faint: #5b6572;
-  --accent: #ff8a34;
-  --accent-ink: #1a0f04;
-  --go: #35c7a6;
-  --danger: #ff5d5f;
-  --warn: #ffcc4d;
-  --shadow: 0 12px 32px rgba(0,0,0,0.45);
+/* ---- forms/cards ---- */
+.screen{padding:16px;flex:1;overflow-y:auto;}
+.card{background:var(--card);border-radius:14px;padding:18px;box-shadow:var(--shadow);margin-bottom:14px;}
+.field{margin-bottom:12px;}
+.field label{display:block;font-size:13px;color:var(--muted);margin-bottom:5px;font-weight:600;}
+.field input,.field select{
+  width:100%;padding:11px 12px;border-radius:10px;border:1px solid var(--border);
+  background:var(--bg);color:var(--text);font-size:15px;
 }
-html.light {
-  --bg: #eef0f3;
-  --bg-elevated: #ffffff;
-  --surface: #ffffff;
-  --surface-2: #f2f3f5;
-  --border: rgba(20,24,29,0.09);
-  --text: #14181d;
-  --text-dim: #5b6572;
-  --text-faint: #8b94a0;
-  --accent: #e5702a;
-  --accent-ink: #ffffff;
-  --go: #16916f;
-  --danger: #d8393b;
-  --warn: #b5790a;
-  --shadow: 0 12px 32px rgba(20,24,29,0.12);
+.btn{
+  width:100%;padding:12px 14px;border-radius:10px;border:none;background:var(--accent);
+  color:#fff;font-weight:700;font-size:15px;transition:.15s;
 }
+.btn:hover{background:var(--accent2);}
+.btn.secondary{background:var(--bg);color:var(--text);border:1px solid var(--border);}
+.btn.danger{background:var(--danger);}
+.btn.success{background:var(--success);}
+.btn.small{width:auto;padding:8px 12px;font-size:13px;}
+.row{display:flex;gap:10px;}
+.row>*{flex:1;}
+.link-btn{background:none;border:none;color:var(--accent);font-weight:600;font-size:14px;padding:6px 0;width:100%;}
+.error-msg{color:var(--danger);font-size:13px;margin-top:8px;}
+.muted{color:var(--muted);font-size:13px;}
+.center{text-align:center;}
 
-/* Dashed "lane marking" divider — the app's signature structural device */
-.lane-divider {
-  height: 0;
-  border-top: 2px dashed var(--text-faint);
-  opacity: 0.35;
-  margin: 0;
+/* ---- ads carousel ---- */
+.ads-wrap{margin-bottom:16px;}
+.ads-track{display:flex;gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;}
+.ad-card{
+  min-width:260px;scroll-snap-align:start;border-radius:14px;overflow:hidden;background:var(--card);
+  box-shadow:var(--shadow);position:relative;text-decoration:none;color:inherit;
 }
+.ad-card img,.ad-card video{width:100%;height:130px;object-fit:cover;display:block;}
+.ad-card .ad-title{padding:8px 10px;font-size:13px;font-weight:600;}
+.ad-tag{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;padding:2px 6px;border-radius:6px;}
 
-a { color: var(--accent); }
-button { font-family: inherit; }
-input, select, textarea { font-family: inherit; }
+/* ---- convoy list (whatsapp-style) ---- */
+.convoy-row{
+  display:flex;align-items:center;gap:12px;padding:12px;background:var(--card);
+  border-radius:12px;margin-bottom:8px;box-shadow:var(--shadow);
+}
+.convoy-row:active{transform:scale(.99);}
+.convoy-avatar{
+  width:46px;height:46px;border-radius:50%;background:var(--accent);color:#fff;
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;flex-shrink:0;
+}
+.convoy-info{flex:1;min-width:0;}
+.convoy-info .name{font-weight:700;font-size:15px;}
+.convoy-info .sub{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.badge{font-size:10.5px;background:var(--accent);color:#fff;padding:2px 7px;border-radius:20px;font-weight:700;}
+.fab{
+  position:fixed;bottom:24px;right:calc(50% - 260px + 24px);width:56px;height:56px;border-radius:50%;
+  background:var(--accent);color:#fff;font-size:26px;border:none;box-shadow:0 4px 14px rgba(0,0,0,.3);z-index:30;
+}
+@media(max-width:560px){.fab{right:20px;}}
 
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-thumb { background: var(--surface-2); border-radius: 8px; }
+/* ---- convoy detail ---- */
+#map{width:100%;height:44vh;min-height:260px;border-bottom:1px solid var(--border);}
+.member-list{padding:10px 12px;}
+.member-item{
+  display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;background:var(--card);
+  margin-bottom:8px;box-shadow:var(--shadow);
+}
+.member-item.speaking{outline:2px solid var(--success);}
+.status-dot{width:10px;height:10px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.status-dot.online{background:var(--success);}
+.member-item .m-info{flex:1;min-width:0;}
+.member-item .m-name{font-weight:700;font-size:14px;display:flex;align-items:center;gap:6px;}
+.member-item .m-meta{font-size:12px;color:var(--muted);}
+.mini-btn{background:none;border:1px solid var(--border);border-radius:8px;padding:5px 9px;font-size:11px;color:var(--text);}
 
-.hidden { display: none !important; }
+/* ---- ptt ---- */
+.ptt-bar{
+  position:sticky;bottom:0;background:var(--bg2);border-top:1px solid var(--border);
+  padding:14px 16px;display:flex;flex-direction:column;align-items:center;gap:8px;z-index:20;
+}
+.ptt-btn{
+  width:88px;height:88px;border-radius:50%;background:var(--accent);color:#fff;border:none;
+  font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;text-align:center;
+  user-select:none;-webkit-user-select:none;touch-action:none;box-shadow:0 4px 14px rgba(0,0,0,.25);
+}
+.ptt-btn.active{background:var(--success);transform:scale(1.08);}
+.ptt-btn:disabled{background:var(--muted);}
+.ptt-status{font-size:12.5px;color:var(--muted);min-height:16px;}
 
-.screen {
-  min-height: 100dvh;
-  display: flex;
-  flex-direction: column;
+/* ---- modal ---- */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:flex-end;justify-content:center;z-index:100;
 }
-
-/* ---- buttons ---- */
-.btn {
-  appearance: none; border: 1px solid var(--border); background: var(--surface-2);
-  color: var(--text); padding: 12px 18px; border-radius: 12px; font-size: 15px;
-  font-weight: 600; cursor: pointer; display: inline-flex; align-items: center;
-  justify-content: center; gap: 8px; transition: transform .08s ease, background .15s ease, opacity .15s ease;
-  -webkit-user-select:none; user-select:none;
+@media(min-width:700px){.modal-overlay{align-items:center;}}
+.modal{
+  background:var(--bg2);width:100%;max-width:480px;border-radius:16px 16px 0 0;padding:20px;
+  max-height:88vh;overflow-y:auto;
 }
-.btn:active { transform: scale(0.97); }
-.btn:disabled { opacity: 0.5; cursor: not-allowed; transform:none; }
-.btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
-.btn-go { background: var(--go); border-color: var(--go); color: #06231c; }
-.btn-danger { background: transparent; border-color: var(--danger); color: var(--danger); }
-.btn-ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
-.btn-block { width: 100%; }
-.btn-sm { padding: 7px 12px; font-size: 13px; border-radius: 9px; }
-.btn-icon { padding: 10px; border-radius: 50%; width: 40px; height: 40px; }
-
-/* ---- inputs ---- */
-.field { margin-bottom: 14px; text-align: left; }
-.field label { display: block; font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-.field input, .field select {
-  width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--border);
-  background: var(--bg-elevated); color: var(--text); font-size: 15px; outline: none;
-}
-.field input:focus, .field select:focus { border-color: var(--accent); }
-.field-hint { font-size: 12px; color: var(--text-faint); margin-top: 5px; }
-.row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-
-/* ---- toasts ---- */
-#toastContainer {
-  position: fixed; top: max(14px, env(safe-area-inset-top)); left: 0; right: 0;
-  display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 9999; pointer-events: none;
-}
-.toast {
-  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
-  padding: 11px 18px; border-radius: 999px; font-size: 13.5px; box-shadow: var(--shadow);
-  max-width: 90vw; text-align: center;
-}
-.toast.error { border-color: var(--danger); color: var(--danger); }
-.toast.success { border-color: var(--go); color: var(--go); }
-.toast.warn { border-color: var(--warn); color: var(--warn); }
-
-/* ==========================================================================
-   AUTH SCREEN
-   ========================================================================== */
-#authScreen {
-  align-items: center; justify-content: center; padding: 28px 18px;
-  background:
-    radial-gradient(600px 300px at 50% -10%, rgba(255,138,52,0.10), transparent),
-    var(--bg);
-}
-.auth-card {
-  width: 100%; max-width: 420px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 20px; padding: 28px 24px; box-shadow: var(--shadow);
-}
-.auth-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 6px; }
-.auth-brand .logo-mark {
-  width: 42px; height: 42px; border-radius: 12px; background: var(--accent);
-  display:flex; align-items:center; justify-content:center; font-size: 20px; flex-shrink:0;
-}
-.auth-brand h1 { font-size: 20px; margin: 0; }
-.auth-brand p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-dim); }
-.auth-tabs { display: flex; gap: 6px; margin: 20px 0 18px; background: var(--surface-2); padding: 4px; border-radius: 12px; }
-.auth-tab { flex: 1; text-align: center; padding: 9px; border-radius: 9px; font-size: 14px; font-weight: 600; color: var(--text-dim); cursor: pointer; }
-.auth-tab.active { background: var(--accent); color: var(--accent-ink); }
-.auth-form { display: none; }
-.auth-form.active { display: block; }
-.auth-error { color: var(--danger); font-size: 13px; margin: 4px 0 14px; min-height: 0; }
-.auth-config-warning { background: rgba(255, 138, 52, 0.12); border: 1px solid var(--accent); color: var(--text); font-size: 12.5px; line-height: 1.5; padding: 12px 14px; border-radius: 10px; margin: 0 0 16px; }
-.auth-config-warning code { background: rgba(255,255,255,0.08); padding: 1px 5px; border-radius: 4px; font-family: 'JetBrains Mono', monospace; }
-.auth-note { text-align:center; font-size: 12.5px; color: var(--text-faint); margin-top: 14px; }
-
-/* ==========================================================================
-   MAIN APP SHELL
-   ========================================================================== */
-#appScreen { background: var(--bg); }
-.topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: max(14px, env(safe-area-inset-top)) 16px 12px;
-  position: sticky; top: 0; z-index: 20; background: var(--bg);
-}
-.topbar-title { display:flex; align-items:center; gap:10px; font-weight: 700; font-size: 17px; }
-.topbar-title .logo-mark { width: 30px; height: 30px; border-radius: 9px; background: var(--accent); display:flex; align-items:center; justify-content:center; font-size:15px; }
-.topbar-actions { display: flex; align-items: center; gap: 6px; }
-.conn-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--go); box-shadow: 0 0 0 3px color-mix(in srgb, var(--go) 25%, transparent); }
-.conn-dot.offline { background: var(--danger); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 25%, transparent); }
-
-.tab-panel { display: none; flex: 1; overflow-y: auto; padding: 4px 16px 100px; }
-.tab-panel.active { display: block; }
-
-.bottom-nav {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
-  display: flex; background: var(--bg-elevated); border-top: 1px dashed var(--text-faint);
-  padding: 8px max(8px, env(safe-area-inset-left)) max(10px, env(safe-area-inset-bottom));
-}
-.nav-btn {
-  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
-  background: none; border: none; color: var(--text-faint); font-size: 11px; font-weight: 600;
-  padding: 6px 0; cursor: pointer; position: relative;
-}
-.nav-btn .nav-icon { font-size: 20px; }
-.nav-btn.active { color: var(--accent); }
-.nav-badge {
-  position: absolute; top: 0; right: 26%; background: var(--danger); color: #fff; font-size: 9px;
-  min-width: 15px; height: 15px; border-radius: 8px; display:flex; align-items:center; justify-content:center; padding: 0 3px;
-}
-
-.section-title { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--text-dim); font-weight: 700; margin: 18px 0 10px; }
-.empty-state { text-align: center; padding: 46px 20px; color: var(--text-faint); }
-.empty-state .emoji { font-size: 40px; margin-bottom: 10px; }
-.empty-state p { font-size: 14px; max-width: 260px; margin: 4px auto 0; }
-
-/* ---- Ads tab ---- */
-.ad-card {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-  overflow: hidden; margin-bottom: 16px; box-shadow: var(--shadow);
-}
-.ad-media { width: 100%; aspect-ratio: 16/9; background: var(--surface-2); object-fit: cover; display:block; }
-.ad-body { padding: 14px 16px; }
-.ad-body h3 { margin: 0 0 4px; font-size: 15.5px; }
-.ad-body p { margin: 0; font-size: 13.5px; color: var(--text-dim); line-height: 1.45; }
-.ad-body .ad-link { display:inline-block; margin-top: 10px; font-size: 13px; font-weight: 700; }
-.ad-sponsor-tag { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-faint); padding: 10px 16px 0; }
-
-/* ---- Convoys tab (WhatsApp-style list) ---- */
-.convoy-actions-row { display:flex; gap: 10px; margin: 6px 0 4px; }
-.convoy-row {
-  display: flex; align-items: center; gap: 13px; padding: 13px 6px; cursor: pointer;
-  border-bottom: 1px dashed var(--border);
-}
-.convoy-row:active { background: var(--surface); }
-.convoy-avatar {
-  width: 48px; height: 48px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--border);
-  display:flex; align-items:center; justify-content:center; font-weight:700; font-size:17px; color: var(--accent); flex-shrink:0;
-}
-.convoy-row-main { flex: 1; min-width: 0; }
-.convoy-row-top { display:flex; justify-content: space-between; align-items:baseline; gap: 8px; }
-.convoy-row-top .name { font-weight: 700; font-size: 15.5px; }
-.convoy-row-top .code { font-size: 11px; color: var(--text-faint); }
-.convoy-row-sub { color: var(--text-dim); font-size: 13px; margin-top: 2px; display:flex; align-items:center; gap:6px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.pill { display:inline-flex; align-items:center; gap:4px; font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing:.03em; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--text-dim); border: 1px solid var(--border); }
-.pill.you { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); border-color: transparent; }
-.pill.go { background: color-mix(in srgb, var(--go) 16%, transparent); color: var(--go); border-color: transparent; }
-
-/* ---- Profile tab ---- */
-.profile-header { display:flex; align-items:center; gap: 14px; padding: 14px 4px 20px; }
-.profile-avatar { width: 64px; height: 64px; border-radius: 50%; background: var(--accent); color: var(--accent-ink); display:flex; align-items:center; justify-content:center; font-size: 24px; font-weight: 700; }
-.profile-header h2 { margin: 0; font-size: 18px; }
-.profile-header p { margin: 3px 0 0; color: var(--text-dim); font-size: 13px; }
-.settings-row { display:flex; align-items:center; justify-content: space-between; padding: 14px 4px; border-bottom: 1px dashed var(--border); gap: 12px; }
-.settings-row .label { font-size: 14.5px; font-weight: 600; }
-.settings-row .desc { font-size: 12.5px; color: var(--text-faint); margin-top: 2px; }
+@media(min-width:700px){.modal{border-radius:16px;}}
+.modal h3{margin-top:0;}
+.close-x{position:sticky;top:0;float:right;background:none;border:none;font-size:20px;color:var(--muted);}
 
 /* ---- toggle switch ---- */
-.switch { position: relative; width: 46px; height: 27px; flex-shrink: 0; }
-.switch input { opacity: 0; width: 0; height: 0; }
-.switch .track { position: absolute; inset: 0; background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; transition: background .15s ease; cursor:pointer; }
-.switch .track::before { content:""; position:absolute; width: 21px; height: 21px; left: 2px; top: 2px; background: var(--text-dim); border-radius: 50%; transition: transform .15s ease, background .15s ease; }
-.switch input:checked + .track { background: color-mix(in srgb, var(--go) 30%, var(--surface-2)); border-color: var(--go); }
-.switch input:checked + .track::before { transform: translateX(19px); background: var(--go); }
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--border);}
+.switch{position:relative;width:44px;height:24px;flex-shrink:0;}
+.switch input{opacity:0;width:0;height:0;}
+.slider{position:absolute;inset:0;background:var(--muted);border-radius:24px;transition:.2s;}
+.slider:before{content:"";position:absolute;width:18px;height:18px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.2s;}
+input:checked+.slider{background:var(--success);}
+input:checked+.slider:before{transform:translateX(20px);}
 
-/* ==========================================================================
-   MODALS
-   ========================================================================== */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(6,8,10,0.55); backdrop-filter: blur(2px);
-  display: flex; align-items: flex-end; justify-content: center; z-index: 200;
+.search-box{display:flex;gap:8px;margin-bottom:8px;}
+.toast{
+  position:fixed;bottom:100px;left:50%;transform:translateX(-50%);background:#111827;color:#fff;
+  padding:10px 16px;border-radius:10px;font-size:13.5px;z-index:200;box-shadow:0 4px 14px rgba(0,0,0,.3);
 }
-@media (min-width: 640px) {
-  .modal-overlay { align-items: center; }
-}
-.modal-sheet {
-  width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 20px 20px 0 0; padding: 20px 20px max(20px, env(safe-area-inset-bottom));
-  box-shadow: var(--shadow);
-}
-@media (min-width: 640px) {
-  .modal-sheet { border-radius: 20px; }
-}
-.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-.modal-head h3 { margin: 0; font-size: 17px; }
-.modal-close { background: none; border: none; color: var(--text-dim); font-size: 22px; cursor: pointer; line-height: 1; padding: 4px; }
-.modal-sub { color: var(--text-dim); font-size: 13px; margin: 0 0 16px; }
-
-.member-manage-row { display:flex; align-items:center; gap: 10px; padding: 10px 0; border-bottom: 1px dashed var(--border); }
-.member-manage-row .mm-name { font-weight: 600; font-size: 14px; flex: 1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.member-manage-row .mm-actions { display:flex; gap: 6px; flex-wrap: wrap; justify-content:flex-end; }
-
-/* ==========================================================================
-   CONVOY ROOM
-   ========================================================================== */
-#convoyRoom {
-  position: fixed; inset: 0; z-index: 100; background: var(--bg); display: none;
-  flex-direction: column;
-}
-#convoyRoom.active { display: flex; }
-.room-header {
-  display:flex; align-items:center; gap: 10px; padding: max(12px, env(safe-area-inset-top)) 12px 10px;
-  background: var(--bg-elevated); border-bottom: 1px dashed var(--text-faint); z-index: 10;
-}
-.room-header h2 { margin: 0; font-size: 16px; }
-.room-header .code-tag { font-size: 11px; color: var(--text-faint); }
-.room-header-main { flex: 1; min-width: 0; }
-.room-header-main .title-row { display:flex; align-items:center; gap:8px; }
-.room-header-status { font-size: 12px; color: var(--text-dim); display:flex; align-items:center; gap:6px; margin-top:1px; }
-
-.room-body { position: relative; flex: 1; min-height: 0; }
-#map { position: absolute; inset: 0; background: #0e1114; }
-
-.route-bar {
-  position: absolute; top: 10px; left: 10px; right: 10px; z-index: 500;
-  display: flex; gap: 8px;
-}
-.route-bar input {
-  flex: 1; padding: 11px 14px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--bg-elevated); color: var(--text); font-size: 14px; box-shadow: var(--shadow); outline: none;
-}
-.route-results {
-  position: absolute; top: 56px; left: 10px; right: 10px; z-index: 500;
-  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
-  box-shadow: var(--shadow); overflow: hidden; max-height: 240px; overflow-y: auto;
-}
-.route-result-item { padding: 11px 14px; font-size: 13.5px; border-bottom: 1px dashed var(--border); cursor: pointer; }
-.route-result-item:last-child { border-bottom: none; }
-.route-active-banner {
-  position: absolute; bottom: 12px; left: 10px; right: 10px; z-index: 480;
-  background: var(--bg-elevated); border: 1px solid var(--border); border-radius: 12px;
-  padding: 9px 12px; font-size: 12.5px; display:flex; align-items:center; justify-content:space-between; gap:10px;
-  box-shadow: var(--shadow);
-}
-
-.member-marker { display:flex; align-items:center; justify-content:center; }
-.member-marker .pin {
-  width: 34px; height: 34px; border-radius: 50%; background: var(--accent); border: 3px solid var(--bg-elevated);
-  display:flex; align-items:center; justify-content:center; font-size: 13px; font-weight: 700; color: var(--accent-ink);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.4); position: relative;
-}
-.member-marker.me .pin { background: var(--go); color: #06231c; }
-.member-marker.offline .pin { background: var(--text-faint); opacity: 0.6; }
-.member-marker .heading-arrow {
-  position: absolute; top: -11px; left: 50%; width: 0; height: 0;
-  border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid var(--accent);
-  transform-origin: 50% 22px;
-}
-.member-marker.me .heading-arrow { border-bottom-color: var(--go); }
-.member-marker .talk-ring {
-  position: absolute; inset: -6px; border-radius: 50%; border: 2px solid var(--warn);
-  animation: talkPulse 1s ease-out infinite;
-}
-@keyframes talkPulse { 0%{ transform: scale(0.85); opacity: 1; } 100%{ transform: scale(1.5); opacity: 0; } }
-
-.member-drawer {
-  position: absolute; left: 0; right: 0; bottom: 0; z-index: 400;
-  background: var(--bg-elevated); border-top: 1px dashed var(--text-faint);
-  border-radius: 18px 18px 0 0; box-shadow: 0 -8px 24px rgba(0,0,0,0.35);
-  max-height: 42%; display:flex; flex-direction:column; transition: max-height .2s ease;
-}
-.member-drawer.collapsed { max-height: 54px; }
-.drawer-handle { display:flex; align-items:center; justify-content:space-between; padding: 10px 16px; cursor: pointer; flex-shrink:0; position:relative; }
-.drawer-handle .bar { width: 36px; height: 4px; border-radius: 4px; background: var(--text-faint); position:absolute; left:50%; top:6px; transform:translateX(-50%); }
-.drawer-list { overflow-y: auto; padding: 0 16px 10px; }
-.member-item { display:flex; align-items:center; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--border); }
-.member-item .mi-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--surface-2); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; color:var(--accent); position:relative; flex-shrink:0; }
-.member-item .mi-avatar .status-dot { position:absolute; bottom:-1px; right:-1px; width:10px; height:10px; border-radius:50%; background: var(--text-faint); border: 2px solid var(--bg-elevated); }
-.member-item .mi-avatar .status-dot.online { background: var(--go); }
-.member-item .mi-main { flex: 1; min-width: 0; }
-.member-item .mi-name { font-weight: 600; font-size: 14px; display:flex; align-items:center; gap:6px; }
-.member-item .mi-meta { font-size: 12px; color: var(--text-dim); display:flex; gap: 10px; margin-top: 1px; flex-wrap:wrap; }
-.mic-badge { color: var(--warn); font-size: 11px; display:none; align-items:center; gap:3px; }
-.mic-badge.on { display: inline-flex; }
-
-.ptt-bar { position: absolute; bottom: 0; left:0; right:0; z-index: 450; pointer-events:none; }
-.ptt-wrap { display:flex; flex-direction:column; align-items:center; gap: 8px; padding: 0 0 14px; pointer-events:none; }
-.ptt-status { font-size: 11.5px; color: var(--text-dim); background: var(--bg-elevated); border:1px solid var(--border); padding: 4px 12px; border-radius: 999px; pointer-events:auto; }
-.ptt-btn {
-  pointer-events: auto;
-  width: 78px; height: 78px; border-radius: 50%; border: 4px solid var(--surface-2);
-  background: var(--surface); color: var(--text); display:flex; align-items:center; justify-content:center;
-  font-size: 28px; box-shadow: var(--shadow); cursor: pointer; -webkit-user-select:none; user-select:none;
-  transition: background .1s ease, border-color .1s ease, transform .1s ease;
-}
-.ptt-btn:active { transform: scale(0.96); }
-.ptt-btn.talking { background: var(--accent); border-color: var(--warn); color: var(--accent-ink); animation: pttGlow 1s ease-in-out infinite alternate; }
-.ptt-btn.open-live { background: var(--go); border-color: var(--go); color: #06231c; }
-.ptt-btn.disabled-btn { opacity: 0.4; cursor: not-allowed; }
-@keyframes pttGlow { from { box-shadow: 0 0 0 0 rgba(255,138,52,0.5), var(--shadow); } to { box-shadow: 0 0 0 14px rgba(255,138,52,0), var(--shadow); } }
-
-.banner {
-  position: absolute; top: 10px; left: 10px; right: 10px; z-index: 600;
-  background: var(--danger); color: #fff; padding: 10px 14px; border-radius: 12px; font-size: 13px;
-  display:flex; align-items:center; justify-content:space-between; gap: 10px; box-shadow: var(--shadow);
-}
-.banner button { background: rgba(255,255,255,0.18); border:none; color:#fff; padding: 6px 10px; border-radius: 8px; font-size:12px; font-weight:700; cursor:pointer; }
-
-.leaflet-routing-container { display: none !important; }
-.leaflet-control-attribution { font-size: 10px !important; }
-
-.spinner {
-  width: 18px; height: 18px; border-radius: 50%; border: 2.5px solid var(--border);
-  border-top-color: var(--accent); animation: spin .7s linear infinite; display:inline-block;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
-.center-loading { display:flex; align-items:center; justify-content:center; height: 100dvh; gap:10px; color: var(--text-dim); }
+.tabs{display:flex;gap:8px;margin-bottom:14px;}
+.tab-btn{flex:1;padding:9px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);font-weight:600;font-size:13px;}
+.tab-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+.leaflet-marker-icon.pulse{filter:drop-shadow(0 0 4px rgba(37,99,235,.8));}
 </style>
 </head>
-<body>
-<div id="toastContainer"></div>
+<body data-theme="light">
+<div id="app">
 
-<!-- ==========================================================================
-     AUTH SCREEN
-     ========================================================================== -->
-<div id="authScreen" class="screen">
-  <div class="auth-card">
-    <div class="auth-brand">
-      <div class="logo-mark">🚚</div>
-      <div>
-        <h1>Convoy Intercom</h1>
-        <p>Live GPS + push-to-talk for your crew</p>
+  <!-- ============ AUTH VIEW ============ -->
+  <div id="view-auth" class="screen">
+    <div class="card" style="margin-top:40px;">
+      <h2 class="center" style="margin-top:0;">🚚 Convoy Intercom</h2>
+      <div class="tabs">
+        <button class="tab-btn active" id="tab-login" onclick="switchAuthTab('login')">Login</button>
+        <button class="tab-btn" id="tab-signup" onclick="switchAuthTab('signup')">Sign Up</button>
       </div>
-    </div>
 
-    <div class="auth-tabs">
-      <div class="auth-tab active" data-auth-tab="login" id="tabBtnLogin">Log In</div>
-      <div class="auth-tab" data-auth-tab="signup" id="tabBtnSignup">Sign Up</div>
-    </div>
+      <div id="login-form">
+        <div class="field"><label>Email</label><input id="li-email" type="email" placeholder="you@example.com"></div>
+        <div class="field"><label>Password</label><input id="li-pass" type="password" placeholder="••••••••"></div>
+        <button class="btn" onclick="doLogin()">Log In</button>
+        <div id="login-err" class="error-msg"></div>
+      </div>
 
-    <div class="auth-config-warning hidden" id="configWarning">
-      <strong>⚠ Not configured yet.</strong> This copy of index.html still has placeholder Supabase
-      credentials. Open the file, find <code>SUPABASE_URL</code> / <code>SUPABASE_ANON_KEY</code> near
-      the top of the <code>&lt;script&gt;</code> tag, and paste in your project's values from
-      Supabase → Project Settings → API. See SETUP.md, step 5.
-    </div>
-
-    <div class="auth-error" id="authError"></div>
-
-    <!-- LOGIN -->
-    <form class="auth-form active" id="formLogin" data-auth-form="login">
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="loginEmail" autocomplete="email" required />
-      </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="loginPassword" autocomplete="current-password" required />
-      </div>
-      <button type="submit" class="btn btn-primary btn-block" id="loginSubmitBtn">Log In</button>
-    </form>
-
-    <!-- SIGN UP -->
-    <form class="auth-form" id="formSignup" data-auth-form="signup">
-      <div class="field">
-        <label>Full Name</label>
-        <input type="text" id="suFullName" autocomplete="name" required />
-      </div>
-      <div class="field">
-        <label>Username</label>
-        <input type="text" id="suUsername" autocomplete="username" pattern="[a-zA-Z0-9_]{3,20}" required placeholder="shown on the map to other members" />
-        <div class="field-hint">3–20 characters, letters/numbers/underscore. This is what convoy members see on the map.</div>
-      </div>
-      <div class="field">
-        <label>Email</label>
-        <input type="email" id="suEmail" autocomplete="email" required />
-      </div>
-      <div class="row-2">
-        <div class="field">
-          <label>Mobile Number</label>
-          <input type="tel" id="suMobile" autocomplete="tel" required />
-        </div>
-        <div class="field">
-          <label>Blood Group</label>
-          <select id="suBloodGroup" required>
-            <option value="">Select</option>
-            <option>A+</option><option>A-</option>
-            <option>B+</option><option>B-</option>
-            <option>AB+</option><option>AB-</option>
-            <option>O+</option><option>O-</option>
-            <option>Unknown</option>
+      <div id="signup-form" class="hidden">
+        <div class="field"><label>Full Name</label><input id="su-name" placeholder="John Carter"></div>
+        <div class="field"><label>Username (unique, shown on map)</label><input id="su-username" placeholder="john_c"></div>
+        <div class="field"><label>Email</label><input id="su-email" type="email" placeholder="you@example.com"></div>
+        <div class="field"><label>Mobile Number</label><input id="su-mobile" type="tel" placeholder="+91 98765 43210"></div>
+        <div class="field"><label>Blood Group</label>
+          <select id="su-blood">
+            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+            <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
           </select>
         </div>
+        <div class="field"><label>Password</label><input id="su-pass" type="password" placeholder="min 6 characters"></div>
+        <button class="btn" onclick="doSignup()">Create Account</button>
+        <div id="signup-err" class="error-msg"></div>
       </div>
-      <div class="field">
-        <label>Password</label>
-        <input type="password" id="suPassword" autocomplete="new-password" minlength="6" required />
-        <div class="field-hint">At least 6 characters.</div>
-      </div>
-      <button type="submit" class="btn btn-primary btn-block" id="signupSubmitBtn">Create Account</button>
-    </form>
-
-    <p class="auth-note" id="authNote"></p>
-  </div>
-</div>
-
-<!-- ==========================================================================
-     MAIN APP SHELL
-     ========================================================================== -->
-<div id="appScreen" class="screen hidden">
-  <div class="topbar">
-    <div class="topbar-title">
-      <div class="logo-mark">🚚</div>
-      <span>Convoy Intercom</span>
-    </div>
-    <div class="topbar-actions">
-      <span class="conn-dot" id="connDot" title="Connection status"></span>
-      <button class="btn btn-icon btn-ghost" id="themeToggleBtn" title="Toggle theme">🌙</button>
     </div>
   </div>
 
-  <!-- ADS TAB (shown first, ahead of convoys, per product requirement) -->
-  <div class="tab-panel active" id="tabAds">
-    <div class="section-title">Featured</div>
-    <div id="adsList"></div>
-    <button class="btn btn-block" id="manageAdsBtn" style="margin-top:6px;">🛠️ Manage Ads (Admin)</button>
-  </div>
-
-  <!-- CONVOYS TAB -->
-  <div class="tab-panel" id="tabConvoys">
-    <div class="convoy-actions-row">
-      <button class="btn btn-primary" style="flex:1" id="openCreateConvoyBtn">+ Create Convoy</button>
-      <button class="btn" style="flex:1" id="openJoinConvoyBtn">🔗 Join Convoy</button>
-    </div>
-    <div class="section-title">My Convoys</div>
-    <div id="convoysList"></div>
-  </div>
-
-  <!-- PROFILE TAB -->
-  <div class="tab-panel" id="tabProfile">
-    <div class="profile-header">
-      <div class="profile-avatar" id="profileAvatar">?</div>
+  <!-- ============ HOME VIEW (ads + convoy list) ============ -->
+  <div id="view-home" class="hidden">
+    <div class="topbar">
+      <h1>🚚 Convoy Intercom</h1>
       <div>
-        <h2 id="profileFullName">—</h2>
-        <p id="profileUsername">@—</p>
+        <button class="iconbtn" onclick="toggleTheme()" title="Toggle theme">🌓</button>
+        <button class="iconbtn" id="admin-nav-btn" onclick="openAdmin()" title="Ads admin">📢</button>
+        <button class="iconbtn" onclick="openProfile()" title="Profile">👤</button>
       </div>
     </div>
+    <div class="screen">
+      <div class="ads-wrap">
+        <div class="ads-track" id="ads-track"></div>
+      </div>
+      <div id="convoy-list"></div>
+      <div id="empty-state" class="card center hidden">
+        <p class="muted">No convoys yet. Create one or join with a code.</p>
+      </div>
+    </div>
+    <button class="fab" onclick="openCreateJoin()">+</button>
+  </div>
 
-    <div class="section-title">Account</div>
-    <div class="field">
-      <label>Full Name</label>
-      <input type="text" id="editFullName" />
-    </div>
-    <div class="field">
-      <label>Username</label>
-      <input type="text" id="editUsername" pattern="[a-zA-Z0-9_]{3,20}" />
-    </div>
-    <div class="row-2">
-      <div class="field">
-        <label>Mobile Number</label>
-        <input type="tel" id="editMobile" />
-      </div>
-      <div class="field">
-        <label>Blood Group</label>
-        <select id="editBloodGroup">
-          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
-          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option><option>Unknown</option>
-        </select>
-      </div>
-    </div>
-    <div class="field">
-      <label>Email</label>
-      <input type="email" id="editEmail" disabled />
-    </div>
-    <button class="btn btn-primary btn-block" id="saveProfileBtn">Save Changes</button>
-
-    <div class="section-title">Privacy</div>
-    <div class="settings-row">
+  <!-- ============ CONVOY DETAIL VIEW ============ -->
+  <div id="view-convoy" class="hidden">
+    <div class="topbar">
+      <button class="iconbtn" onclick="leaveConvoyView()">←</button>
+      <h1 id="convoy-title">Convoy</h1>
       <div>
-        <div class="label">Share my location</div>
-        <div class="desc">Master switch. Turn off to hide from every convoy, everywhere.</div>
-      </div>
-      <label class="switch"><input type="checkbox" id="globalLocationToggle" checked /><span class="track"></span></label>
-    </div>
-
-    <div class="section-title">App</div>
-    <button class="btn btn-block" id="logoutBtn" style="color:var(--danger); border-color:var(--danger);">Log Out</button>
-    <p style="text-align:center; color:var(--text-faint); font-size:12px; margin-top:18px;">Convoy Intercom</p>
-  </div>
-
-  <div class="bottom-nav">
-    <button class="nav-btn active" data-tab="tabAds"><span class="nav-icon">📣</span>Ads</button>
-    <button class="nav-btn" data-tab="tabConvoys"><span class="nav-icon">🚙</span>Convoys</button>
-    <button class="nav-btn" data-tab="tabProfile"><span class="nav-icon">👤</span>Profile</button>
-  </div>
-</div>
-
-<!-- ==========================================================================
-     CONVOY ROOM (full-screen overlay: map + members + PTT)
-     ========================================================================== -->
-<div id="convoyRoom">
-  <div class="room-header">
-    <button class="btn btn-icon btn-ghost" id="exitRoomBtn" title="Exit convoy room">←</button>
-    <div class="room-header-main">
-      <div class="title-row">
-        <h2 id="roomConvoyName">Convoy</h2>
-        <span class="code-tag mono" id="roomConvoyCode"></span>
-      </div>
-      <div class="room-header-status">
-        <span class="conn-dot" id="roomConnDot"></span>
-        <span id="roomOnlineCount">0 online</span>
+        <button class="iconbtn" onclick="openConvoySettings()" title="Convoy settings">⚙️</button>
       </div>
     </div>
-    <button class="btn btn-icon btn-ghost" id="openRoomSettingsBtn" title="Convoy settings">⚙️</button>
-  </div>
-
-  <div class="room-body">
     <div id="map"></div>
-
-    <div class="banner hidden" id="gpsBanner">
-      <span id="gpsBannerText">Location permission needed to share your position.</span>
-      <button id="gpsBannerRetry">Enable</button>
-    </div>
-
-    <div class="route-bar hidden" id="routeBar">
-      <input type="text" id="routeSearchInput" placeholder="Search a destination to route the convoy…" />
-      <button class="btn btn-icon" id="routeClearBtn" title="Clear route">✕</button>
-    </div>
-    <div class="route-results hidden" id="routeResults"></div>
-    <div class="route-active-banner hidden" id="routeActiveBanner">
-      <span id="routeActiveText">Routing to destination</span>
-      <button class="btn btn-sm" id="routeActiveClearBtn">Clear</button>
-    </div>
-
-    <div class="member-drawer" id="memberDrawer">
-      <div class="drawer-handle" id="drawerHandle">
-        <span class="bar"></span>
-        <strong style="font-size:13px;">Members</strong>
-        <span class="mono" id="drawerCount" style="font-size:12px; color:var(--text-dim);">0</span>
+    <div class="screen" style="padding-top:8px;">
+      <div class="search-box hidden" id="route-search-box">
+        <input id="route-search-input" placeholder="Search destination…" style="flex:1;padding:10px;border-radius:10px;border:1px solid var(--border);background:var(--bg2);color:var(--text);">
+        <button class="btn small" onclick="searchDestination()">Set Route</button>
+        <button class="btn small secondary" onclick="clearRoute()">Clear</button>
       </div>
-      <div class="drawer-list" id="memberList"></div>
+      <div class="member-list" id="member-list"></div>
     </div>
-
     <div class="ptt-bar">
-      <div class="ptt-wrap">
-        <span class="ptt-status" id="pttStatus">Hold to talk</span>
-        <button class="ptt-btn" id="pttBtn">🎙️</button>
-      </div>
+      <div class="ptt-status" id="ptt-status">Hold to talk</div>
+      <button class="ptt-btn" id="ptt-btn">HOLD<br>TO TALK</button>
     </div>
   </div>
-</div>
 
-<!-- ==========================================================================
-     MODALS
-     ========================================================================== -->
-
-<!-- Create Convoy -->
-<div class="modal-overlay hidden" id="modalCreateConvoy">
-  <div class="modal-sheet">
-    <div class="modal-head"><h3>Create a Convoy</h3><button class="modal-close" data-close-modal="modalCreateConvoy">✕</button></div>
-    <p class="modal-sub">You'll get a unique code to invite your crew with.</p>
-    <div class="field">
-      <label>Convoy Name</label>
-      <input type="text" id="newConvoyName" placeholder="e.g. Weekend Road Trip" maxlength="60" />
+  <!-- ============ PROFILE VIEW ============ -->
+  <div id="view-profile" class="hidden">
+    <div class="topbar">
+      <button class="iconbtn" onclick="closeProfile()">←</button>
+      <h1>Profile</h1>
+      <div></div>
     </div>
-    <button class="btn btn-primary btn-block" id="createConvoySubmitBtn">Create Convoy</button>
-  </div>
-</div>
-
-<!-- Join Convoy -->
-<div class="modal-overlay hidden" id="modalJoinConvoy">
-  <div class="modal-sheet">
-    <div class="modal-head"><h3>Join a Convoy</h3><button class="modal-close" data-close-modal="modalJoinConvoy">✕</button></div>
-    <p class="modal-sub">Enter the 6-character code shared by the convoy creator.</p>
-    <div class="field">
-      <label>Convoy Code</label>
-      <input type="text" id="joinConvoyCode" maxlength="6" style="text-transform:uppercase; letter-spacing:3px; font-weight:700;" placeholder="ABC123" />
-    </div>
-    <button class="btn btn-primary btn-block" id="joinConvoySubmitBtn">Join Convoy</button>
-  </div>
-</div>
-
-<!-- Convoy Settings (room) -->
-<div class="modal-overlay hidden" id="modalConvoySettings">
-  <div class="modal-sheet">
-    <div class="modal-head"><h3>Convoy Settings</h3><button class="modal-close" data-close-modal="modalConvoySettings">✕</button></div>
-
-    <div class="section-title" style="margin-top:0;">My Settings</div>
-    <div class="settings-row">
-      <div>
-        <div class="label">Visible in this convoy</div>
-        <div class="desc">Let this group see your live location.</div>
-      </div>
-      <label class="switch"><input type="checkbox" id="myVisibilityToggle" /><span class="track"></span></label>
-    </div>
-    <button class="btn btn-danger btn-block" id="leaveConvoyBtn" style="margin-top:12px;">Leave This Convoy</button>
-
-    <div id="adminSettingsSection">
-      <div class="lane-divider" style="margin: 20px 0;"></div>
-      <div class="section-title" style="margin-top:0;">Admin Settings</div>
-
-      <div class="settings-row">
-        <div>
-          <div class="label">Push-to-talk mode</div>
-          <div class="desc">Off = open mic, anyone can talk anytime.</div>
+    <div class="screen">
+      <div class="card">
+        <div class="field"><label>Full Name</label><input id="pf-name"></div>
+        <div class="field"><label>Username</label><input id="pf-username"></div>
+        <div class="field"><label>Mobile Number</label><input id="pf-mobile"></div>
+        <div class="field"><label>Blood Group</label>
+          <select id="pf-blood">
+            <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+            <option>O+</option><option>O-</option><option>AB+</option><option>AB-</option>
+          </select>
         </div>
-        <label class="switch"><input type="checkbox" id="pttModeToggle" /><span class="track"></span></label>
+        <button class="btn" onclick="saveProfile()">Save Changes</button>
       </div>
-      <div class="settings-row">
-        <div>
-          <div class="label">Silence entire group</div>
-          <div class="desc">Blocks all voice for everyone, including you.</div>
-        </div>
-        <label class="switch"><input type="checkbox" id="muteAllToggle" /><span class="track"></span></label>
-      </div>
-
-      <div class="section-title">Members</div>
-      <div id="memberManageList"></div>
-
-      <div class="field" style="margin-top:14px;">
-        <label>Add Member by Username</label>
-        <div style="display:flex; gap:8px;">
-          <input type="text" id="addMemberUsername" placeholder="username" style="flex:1;" />
-          <button class="btn btn-primary" id="addMemberBtn">Add</button>
+      <div class="card">
+        <div class="switch-row">
+          <div><b>Share My Location</b><div class="muted">Turn off to stop sharing location everywhere</div></div>
+          <label class="switch"><input type="checkbox" id="pf-location-toggle" onchange="toggleGlobalLocation()"><span class="slider"></span></label>
         </div>
       </div>
-
-      <div class="lane-divider" style="margin: 20px 0;"></div>
-      <button class="btn btn-danger btn-block" id="deleteConvoyBtn">Delete This Convoy</button>
+      <button class="btn danger" onclick="doLogout()">Log Out</button>
     </div>
   </div>
-</div>
 
-<!-- Ads (public list is on the Ads tab). This modal is the admin CRUD panel. -->
-<div class="modal-overlay hidden" id="modalAdsAdmin">
-  <div class="modal-sheet">
-    <div class="modal-head"><h3>Manage Ads</h3><button class="modal-close" data-close-modal="modalAdsAdmin">✕</button></div>
-    <div id="adEditorForm">
-      <input type="hidden" id="adEditId" value="" />
-      <div class="field"><label>Title</label><input type="text" id="adTitle" /></div>
-      <div class="field"><label>Description</label><input type="text" id="adDescription" /></div>
-      <div class="field"><label>Media URL (image or video link)</label><input type="text" id="adMediaUrl" placeholder="https://…" /></div>
-      <div class="row-2">
-        <div class="field">
-          <label>Media Type</label>
-          <select id="adMediaType"><option value="image">Image</option><option value="video">Video</option></select>
+  <!-- ============ ADMIN VIEW (ads management) ============ -->
+  <div id="view-admin" class="hidden">
+    <div class="topbar">
+      <button class="iconbtn" onclick="closeAdmin()">←</button>
+      <h1>Ads Admin</h1>
+      <div></div>
+    </div>
+    <div class="screen">
+      <div class="card">
+        <h3 style="margin-top:0;">New Ad</h3>
+        <div class="field"><label>Title</label><input id="ad-title"></div>
+        <div class="field"><label>Media URL (image or video)</label><input id="ad-media"></div>
+        <div class="field"><label>Type</label>
+          <select id="ad-type"><option value="image">Image</option><option value="video">Video</option></select>
         </div>
-        <div class="field"><label>Display Order</label><input type="number" id="adOrder" value="0" /></div>
+        <div class="field"><label>Link URL (optional)</label><input id="ad-link"></div>
+        <button class="btn" onclick="createAd()">Publish Ad</button>
       </div>
-      <div class="field"><label>Link URL (optional, opens on tap)</label><input type="text" id="adLinkUrl" placeholder="https://…" /></div>
-      <div class="settings-row" style="padding-left:0;">
-        <div class="label">Active</div>
-        <label class="switch"><input type="checkbox" id="adActive" checked /><span class="track"></span></label>
-      </div>
-      <div style="display:flex; gap:8px; margin-top:8px;">
-        <button class="btn btn-primary" style="flex:1" id="adSaveBtn">Save Ad</button>
-        <button class="btn btn-ghost hidden" id="adNewBtn">New Ad</button>
-      </div>
-    </div>
-    <div class="lane-divider" style="margin: 18px 0;"></div>
-    <div class="section-title" style="margin-top:0;">All Ads</div>
-    <div id="adsAdminList"></div>
-  </div>
-</div>
-
-<!-- Generic confirm dialog -->
-<div class="modal-overlay hidden" id="modalConfirm">
-  <div class="modal-sheet" style="max-width:360px;">
-    <h3 id="confirmTitle" style="margin:0 0 8px;">Are you sure?</h3>
-    <p id="confirmMessage" style="color:var(--text-dim); font-size:14px; margin:0 0 18px;"></p>
-    <div style="display:flex; gap:10px;">
-      <button class="btn" style="flex:1" id="confirmCancelBtn">Cancel</button>
-      <button class="btn btn-danger" style="flex:1" id="confirmOkBtn">Confirm</button>
+      <div id="ad-manage-list"></div>
     </div>
   </div>
 </div>
 
-<div id="remoteAudios" style="display:none;"></div>
-
-<!-- Leaflet + Routing Machine + Supabase JS (CDN, no build tools) -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- generic modal container -->
+<div id="modal-root"></div>
+<div id="toast-root"></div>
 
 <script>
-'use strict';
+/* ======================================================================
+   CONVOY INTERCOM — single-file app
+   PASTE YOUR SUPABASE CREDENTIALS BELOW ↓↓↓
+   ====================================================================== */
+const SUPABASE_URL = "PASTE_YOUR_SUPABASE_URL_HERE";
+const SUPABASE_ANON_KEY = "PASTE_YOUR_SUPABASE_ANON_KEY_HERE";
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth:{ persistSession:true, storage: window.localStorage, autoRefreshToken:true }
+});
 
-/* ============================================================================
-   1. CONFIG — paste your Supabase project credentials here
-   ============================================================================ */
-const SUPABASE_URL = "https://kjvcnotidbifaymoeadn.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtqdmNub3RpZGJpZmF5bW9lYWRuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMyMzM4MzcsImV4cCI6MjA5ODgwOTgzN30.vmOujJP2lxgeSxSlpsPAhBy5jJ74OlTic0lNWvxwV8w";
+/* ---------------- Global state ---------------- */
+let currentUser = null;        // auth user
+let myProfile = null;          // profiles row
+let myConvoys = [];            // saved_convoys joined with convoys
+let activeConvoy = null;       // convoy row currently open
+let activeMembership = null;   // my convoy_members row for active convoy
+let members = {};              // user_id -> {profile, member row, location, online}
+let map, myMarker, routeControl;
+let markerLayer = {};
+let watchId = null;
+let lastSentAt = 0;
+let lastPos = null;
+let locChannel, memberChannel, speakChannel, signalChannel, presenceChannel, routeChannel;
+let localStream = null;
+let peers = {};                // user_id -> RTCPeerConnection
+let audioEls = {};
+let pttHeld = false;
+let ads = [];
 
-// IMPORTANT: the whole app used to break silently — with every button on the
-// page completely unresponsive and no visible error — if createClient() threw
-// (e.g. because the URL/key above were still placeholders, or malformed).
-// That throw would happen at top-level script scope and abort every line of
-// JS below it, including all the addEventListener() calls further down, so
-// NOTHING would respond to clicks. We now guard against that: if the client
-// can't be created, `supabase` stays null, the rest of this script still runs
-// and wires up the UI, and a visible banner explains what to fix.
-let supabase = null;
-let SUPABASE_CONFIGURED = true;
-let SUPABASE_CONFIG_ERROR = '';
-try {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY ||
-      SUPABASE_URL.includes('PASTE_YOUR_SUPABASE') ||
-      SUPABASE_ANON_KEY.includes('PASTE_YOUR_SUPABASE')) {
-    throw new Error(
-      'PLACEHOLDER: Supabase is not configured yet. Open index.html, find the CONFIG section near the top ' +
-      'of the <script> tag, and replace SUPABASE_URL / SUPABASE_ANON_KEY with your project\'s ' +
-      'values from Supabase -> Project Settings -> API.'
-    );
-  }
-  if (typeof window.supabase === 'undefined' || typeof window.supabase.createClient !== 'function') {
-    // This means the Supabase JS SDK <script> tag (cdn.jsdelivr.net) never loaded —
-    // usually a blocked CDN, an ad/script blocker, or no internet connection at load time.
-    throw new Error(
-      'SDK_MISSING: The Supabase code library did not load from cdn.jsdelivr.net. Check your internet ' +
-      'connection, disable any ad-blocker/script-blocker for this page, then reload.'
-    );
-  }
-  supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      persistSession: true,       // session survives reloads
-      storage: window.localStorage, // explicit localStorage persistence
-      autoRefreshToken: true,
-      detectSessionInUrl: true
-    }
+/* ---------------- utils ---------------- */
+function $(id){ return document.getElementById(id); }
+function show(id){ $(id).classList.remove('hidden'); }
+function hide(id){ $(id).classList.add('hidden'); }
+function toast(msg,ms=2600){
+  const t=document.createElement('div'); t.className='toast'; t.textContent=msg;
+  $('toast-root').appendChild(t); setTimeout(()=>t.remove(),ms);
+}
+function haversine(lat1,lon1,lat2,lon2){
+  const R=6371000, toRad=d=>d*Math.PI/180;
+  const dLat=toRad(lat2-lat1), dLon=toRad(lon2-lon1);
+  const a=Math.sin(dLat/2)**2+Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+function fmtDist(m){ if(m==null) return '—'; return m<1000? Math.round(m)+' m' : (m/1000).toFixed(1)+' km'; }
+function fmtSpeed(mps){ if(mps==null||isNaN(mps)) return '0 km/h'; return Math.max(0,Math.round(mps*3.6))+' km/h'; }
+function timeAgo(ts){
+  if(!ts) return 'never';
+  const s=Math.floor((Date.now()-new Date(ts).getTime())/1000);
+  if(s<10) return 'just now';
+  if(s<60) return s+'s ago';
+  if(s<3600) return Math.floor(s/60)+'m ago';
+  return Math.floor(s/3600)+'h ago';
+}
+function initials(name){ return (name||'?').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase(); }
+function uuidShort(){ return Math.random().toString(36).slice(2,8); }
+
+/* ---------------- THEME ---------------- */
+function applyTheme(t){ document.body.setAttribute('data-theme',t); localStorage.setItem('ci_theme',t); }
+function toggleTheme(){
+  applyTheme(document.body.getAttribute('data-theme')==='dark'?'light':'dark');
+}
+applyTheme(localStorage.getItem('ci_theme')||'light');
+
+/* ======================================================================
+   AUTH
+   ====================================================================== */
+function switchAuthTab(tab){
+  $('tab-login').classList.toggle('active',tab==='login');
+  $('tab-signup').classList.toggle('active',tab==='signup');
+  $('login-form').classList.toggle('hidden',tab!=='login');
+  $('signup-form').classList.toggle('hidden',tab!=='signup');
+}
+
+async function doSignup(){
+  const errEl=$('signup-err'); errEl.textContent='';
+  const full_name=$('su-name').value.trim();
+  const username=$('su-username').value.trim().toLowerCase().replace(/\s+/g,'_');
+  const email=$('su-email').value.trim();
+  const mobile=$('su-mobile').value.trim();
+  const blood=$('su-blood').value;
+  const pass=$('su-pass').value;
+  if(!full_name||!username||!email||!mobile||!pass){ errEl.textContent='Please fill all fields.'; return; }
+  if(pass.length<6){ errEl.textContent='Password must be at least 6 characters.'; return; }
+  const {data,error}=await sb.auth.signUp({
+    email, password:pass,
+    options:{ data:{ full_name, username, mobile_number:mobile, blood_group:blood } }
   });
-} catch (err) {
-  SUPABASE_CONFIGURED = false;
-  SUPABASE_CONFIG_ERROR = (err.message || '').replace(/^PLACEHOLDER:\s*|^SDK_MISSING:\s*/, '');
-  console.error('[Convoy Intercom] Supabase client not initialized:', err.message);
+  if(error){ errEl.textContent=error.message; return; }
+  if(data.user && !data.session){
+    toast('Account created. Check your email to confirm, then log in.',5000);
+    switchAuthTab('login');
+    return;
+  }
+  await afterAuth();
 }
 
-// Update-interval knobs (battery vs. freshness trade-off)
-const LOCATION_FAST_INTERVAL_MS = 3000;   // while moving
-const LOCATION_SLOW_INTERVAL_MS = 10000;  // while stationary for a while
-const STATIONARY_SPEED_MS = 0.5;          // m/s, below this counts as "stopped"
-const STATIONARY_GRACE_MS = 30000;        // how long stopped before slowing down
-const DB_PERSIST_INTERVAL_MS = 12000;     // how often we write to the `locations` table
-const ICE_SERVERS = [{ urls: 'stun:stun.l.google.com:19302' }, { urls: 'stun:stun1.l.google.com:19302' }];
-const TALK_VOLUME_THRESHOLD = 0.045;      // simple VAD RMS threshold
-
-/* ============================================================================
-   2. GLOBAL STATE
-   ============================================================================ */
-const App = {
-  session: null,
-  profile: null,           // my row from public.profiles
-  convoys: [],              // list for the Convoys tab: {convoy, role, can_set_route, memberCount}
-  ads: [],
-  theme: localStorage.getItem('ci_theme') || (matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'),
-  online: navigator.onLine,
-  confirmResolver: null,
-
-  room: null // set by enterConvoyRoom(); a single object holds ALL live-session state
-};
-
-function freshRoomState(convoyId) {
-  return {
-    convoyId,
-    convoy: null,
-    myMembership: null,       // {role, can_set_route}
-    members: new Map(),       // user_id -> {username, full_name, blood_group, role, can_set_route}
-    presenceState: new Map(), // user_id -> {lat,lng,heading,speed,accuracy,updated_at,talking,online}
-    myLocation: null,
-    map: null,
-    markers: new Map(),       // user_id -> L.Marker
-    routingControl: null,
-    routeDestination: null,
-    presenceChannel: null,
-    dbChannels: [],           // postgres_changes channel subscriptions to clean up
-    watchId: null,
-    lastSentAt: 0,
-    lastMovingAt: Date.now(),
-    dbPersistTimer: null,
-    routeUpdateTimer: null,
-    clockTimer: null,
-    wakeLock: null,
-    drawerCollapsed: false,
-    // WebRTC
-    localStream: null,
-    audioCtx: null,
-    analyser: null,
-    vadRAF: null,
-    talking: false,
-    peers: new Map(),         // user_id -> { pc: RTCPeerConnection, audioEl }
-    signalChannel: null,
-    pttHeld: false
-  };
+async function doLogin(){
+  const errEl=$('login-err'); errEl.textContent='';
+  const email=$('li-email').value.trim(), pass=$('li-pass').value;
+  if(!email||!pass){ errEl.textContent='Enter email and password.'; return; }
+  const {error}=await sb.auth.signInWithPassword({email,password:pass});
+  if(error){ errEl.textContent=error.message; return; }
+  await afterAuth();
 }
 
-/* ============================================================================
-   3. TINY DOM / FORMATTING UTILITIES
-   ============================================================================ */
-const $ = (sel, root = document) => root.querySelector(sel);
-const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-
-function escapeHTML(str) {
-  if (str === null || str === undefined) return '';
-  return String(str).replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
+async function doLogout(){
+  await leaveConvoyView(true);
+  await sb.auth.signOut();
+  currentUser=null; myProfile=null;
+  hide('view-home'); hide('view-profile'); hide('view-admin'); hide('view-convoy');
+  show('view-auth');
 }
 
-function toast(message, type = '') {
-  const el = document.createElement('div');
-  el.className = `toast ${type}`.trim();
-  el.textContent = message;
-  $('#toastContainer').appendChild(el);
-  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 2600);
-  setTimeout(() => el.remove(), 3000);
+async function afterAuth(){
+  const {data:{user}}=await sb.auth.getUser();
+  currentUser=user;
+  if(!currentUser){ toast('Login failed'); return; }
+  const {data:profile,error}=await sb.from('profiles').select('*').eq('id',currentUser.id).single();
+  if(error || !profile){ toast('Profile not ready yet, retrying…'); setTimeout(afterAuth,1200); return; }
+  myProfile=profile;
+  hide('view-auth');
+  show('view-home');
+  $('pf-location-toggle').checked = myProfile.location_enabled;
+  $('admin-nav-btn').style.display = myProfile.is_admin ? '' : 'none';
+  await loadAds();
+  await loadMyConvoys();
 }
 
-function showConfirm(title, message) {
-  return new Promise(resolve => {
-    $('#confirmTitle').textContent = title;
-    $('#confirmMessage').textContent = message;
-    App.confirmResolver = resolve;
-    $('#modalConfirm').classList.remove('hidden');
+/* Restore session on load */
+(async function boot(){
+  const {data:{session}} = await sb.auth.getSession();
+  if(session){ await afterAuth(); } else { show('view-auth'); }
+  sb.auth.onAuthStateChange((event)=>{
+    if(event==='SIGNED_OUT'){ show('view-auth'); hide('view-home'); }
+  });
+  window.addEventListener('online', handleReconnect);
+})();
+
+/* ======================================================================
+   HOME / CONVOY LIST (WhatsApp-style)
+   ====================================================================== */
+async function loadAds(){
+  const {data}=await sb.from('ads').select('*').eq('active',true).order('created_at',{ascending:false});
+  ads=data||[];
+  const track=$('ads-track'); track.innerHTML='';
+  ads.forEach(ad=>{
+    const el=document.createElement(ad.link_url?'a':'div');
+    el.className='ad-card';
+    if(ad.link_url){ el.href=ad.link_url; el.target='_blank'; }
+    el.innerHTML = (ad.media_type==='video'
+      ? `<video src="${ad.media_url}" muted loop autoplay playsinline></video>`
+      : `<img src="${ad.media_url}" alt="${ad.title}">`)
+      + `<span class="ad-tag">Ad</span><div class="ad-title">${ad.title}</div>`;
+    track.appendChild(el);
   });
 }
-$('#confirmOkBtn').addEventListener('click', () => {
-  $('#modalConfirm').classList.add('hidden');
-  if (App.confirmResolver) App.confirmResolver(true);
-  App.confirmResolver = null;
-});
-$('#confirmCancelBtn').addEventListener('click', () => {
-  $('#modalConfirm').classList.add('hidden');
-  if (App.confirmResolver) App.confirmResolver(false);
-  App.confirmResolver = null;
-});
 
-function openModal(id) { $('#' + id).classList.remove('hidden'); }
-function closeModal(id) { $('#' + id).classList.add('hidden'); }
-$$('[data-close-modal]').forEach(btn => {
-  btn.addEventListener('click', () => closeModal(btn.dataset.closeModal));
-});
-$$('.modal-overlay').forEach(ov => {
-  ov.addEventListener('click', e => { if (e.target === ov) ov.classList.add('hidden'); });
-});
+async function loadMyConvoys(){
+  const {data:saved}=await sb.from('saved_convoys').select('convoy_id, convoys(*)').eq('user_id',currentUser.id).order('saved_at',{ascending:false});
+  myConvoys = (saved||[]).filter(s=>s.convoys).map(s=>s.convoys);
+  const {data:memberRows}=await sb.from('convoy_members').select('convoy_id').eq('user_id',currentUser.id);
+  const activeSet = new Set((memberRows||[]).map(m=>m.convoy_id));
 
-// Haversine distance in meters
-function distanceMeters(lat1, lon1, lat2, lon2) {
-  const R = 6371000;
-  const toRad = d => d * Math.PI / 180;
-  const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-function formatDistance(m) {
-  if (m == null || isNaN(m)) return '—';
-  if (m < 1000) return `${Math.round(m)} m`;
-  return `${(m / 1000).toFixed(1)} km`;
-}
-function formatSpeed(mps) {
-  if (mps == null || isNaN(mps) || mps < 0) return '0 km/h';
-  return `${Math.round(mps * 3.6)} km/h`;
-}
-function formatRelativeTime(iso) {
-  if (!iso) return 'never';
-  const diff = Math.max(0, Date.now() - new Date(iso).getTime());
-  const s = Math.floor(diff / 1000);
-  if (s < 5) return 'just now';
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ago`;
-}
-function initials(name) {
-  if (!name) return '?';
-  return name.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
-}
-
-
-/* ============================================================================
-   4. THEME
-   ============================================================================ */
-function applyTheme() {
-  document.documentElement.classList.toggle('light', App.theme === 'light');
-  document.documentElement.classList.toggle('dark', App.theme === 'dark');
-  $('#themeToggleBtn').textContent = App.theme === 'dark' ? '🌙' : '☀️';
-  $('#faviconLink').setAttribute('href', PWA.icon32 || '');
-}
-$('#themeToggleBtn').addEventListener('click', () => {
-  App.theme = App.theme === 'dark' ? 'light' : 'dark';
-  localStorage.setItem('ci_theme', App.theme);
-  applyTheme();
-});
-
-/* ============================================================================
-   5. PWA — dynamically generated manifest + service worker + app icons
-   (kept fully inside this single file, per the single-file requirement)
-   ============================================================================ */
-const PWA = { icon32: null };
-
-function drawIcon(size) {
-  const canvas = document.createElement('canvas');
-  canvas.width = size; canvas.height = size;
-  const ctx = canvas.getContext('2d');
-  const r = size * 0.22;
-  ctx.fillStyle = '#0b0e11';
-  ctx.beginPath();
-  ctx.moveTo(r, 0);
-  ctx.arcTo(size, 0, size, size, r);
-  ctx.arcTo(size, size, 0, size, r);
-  ctx.arcTo(0, size, 0, 0, r);
-  ctx.arcTo(0, 0, size, 0, r);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#ff8a34';
-  ctx.beginPath();
-  ctx.moveTo(size * 0.50, size * 0.16);
-  ctx.lineTo(size * 0.80, size * 0.60);
-  ctx.lineTo(size * 0.60, size * 0.60);
-  ctx.lineTo(size * 0.60, size * 0.84);
-  ctx.lineTo(size * 0.40, size * 0.84);
-  ctx.lineTo(size * 0.40, size * 0.60);
-  ctx.lineTo(size * 0.20, size * 0.60);
-  ctx.closePath();
-  ctx.fill();
-  return canvas.toDataURL('image/png');
-}
-
-function setupPWA() {
-  try {
-    const icon192 = drawIcon(192);
-    const icon512 = drawIcon(512);
-    PWA.icon32 = drawIcon(32);
-    $('#faviconLink').setAttribute('href', PWA.icon32);
-
-    const manifest = {
-      name: 'Convoy Intercom',
-      short_name: 'Convoy',
-      description: 'Live convoy GPS tracking and push-to-talk intercom.',
-      start_url: '.',
-      scope: '.',
-      display: 'standalone',
-      orientation: 'portrait-primary',
-      background_color: '#0b0e11',
-      theme_color: '#0b0e11',
-      icons: [
-        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
-        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'maskable' },
-        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' },
-        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'maskable' }
-      ]
-    };
-    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/json' });
-    $('#manifestLink').setAttribute('href', URL.createObjectURL(manifestBlob));
-  } catch (e) {
-    console.warn('PWA manifest generation failed', e);
-  }
-
-  if ('serviceWorker' in navigator) {
-    try {
-      const swSource = `
-        const CACHE_NAME = 'convoy-intercom-v1';
-        self.addEventListener('install', (e) => { self.skipWaiting(); });
-        self.addEventListener('activate', (e) => { e.waitUntil(self.clients.claim()); });
-        self.addEventListener('fetch', (e) => {
-          if (e.request.mode === 'navigate') {
-            e.respondWith(
-              fetch(e.request)
-                .then((res) => { caches.open(CACHE_NAME).then((c) => c.put(e.request, res.clone())); return res; })
-                .catch(() => caches.match(e.request).then((r) => r || caches.match('./')))
-            );
-          }
-        });
-      `;
-      const swBlob = new Blob([swSource], { type: 'application/javascript' });
-      const swUrl = URL.createObjectURL(swBlob);
-      navigator.serviceWorker.register(swUrl).catch(err => console.warn('Service worker registration failed:', err));
-    } catch (e) {
-      console.warn('Service worker setup failed', e);
-    }
-  }
-}
-
-/* ============================================================================
-   6. CONNECTIVITY — banners + auto-reconnect
-   ============================================================================ */
-function setConnDot(online) {
-  App.online = online;
-  $$('#connDot, #roomConnDot').forEach(d => d.classList.toggle('offline', !online));
-}
-window.addEventListener('online', () => {
-  setConnDot(true);
-  toast('Back online — reconnecting…', 'success');
-  // Realtime channels auto-reconnect their websocket, but we proactively
-  // re-subscribe the active room's channels in case any silently dropped.
-  if (App.room) rejoinRoomChannels();
-  refreshConvoysList();
-  loadAds();
-});
-window.addEventListener('offline', () => {
-  setConnDot(false);
-  toast('You are offline. Location sharing will resume automatically.', 'warn');
-});
-
-
-/* ============================================================================
-   7. AUTH
-   ============================================================================ */
-if (!SUPABASE_CONFIGURED) {
-  $('#configWarning').textContent = '⚠ ' + SUPABASE_CONFIG_ERROR;
-  $('#configWarning').classList.remove('hidden');
-}
-
-$$('.auth-tab').forEach(tab => {
-  tab.addEventListener('click', () => {
-    $$('.auth-tab').forEach(t => t.classList.remove('active'));
-    $$('.auth-form').forEach(f => f.classList.remove('active'));
-    tab.classList.add('active');
-    $(`[data-auth-form="${tab.dataset.authTab}"]`).classList.add('active');
-    $('#authError').textContent = '';
-    $('#authNote').textContent = '';
+  const list=$('convoy-list'); list.innerHTML='';
+  if(myConvoys.length===0){ show('empty-state'); } else { hide('empty-state'); }
+  myConvoys.forEach(c=>{
+    const row=document.createElement('div'); row.className='convoy-row';
+    row.onclick=()=>enterConvoy(c);
+    row.innerHTML=`
+      <div class="convoy-avatar">${initials(c.name)}</div>
+      <div class="convoy-info">
+        <div class="name">${c.name} ${activeSet.has(c.id)?'<span class="badge">IN</span>':''}</div>
+        <div class="sub">Code: ${c.code} • ${activeSet.has(c.id)?'Tap to open':'Tap to rejoin'}</div>
+      </div>`;
+    list.appendChild(row);
   });
-});
-
-function setAuthBusy(busy) {
-  $('#loginSubmitBtn').disabled = busy;
-  $('#signupSubmitBtn').disabled = busy;
 }
 
-$('#formLogin').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('#authError').textContent = '';
-  setAuthBusy(true);
-  try {
-    if (!supabase) throw new Error(SUPABASE_CONFIG_ERROR || 'Supabase is not configured.');
-    const email = $('#loginEmail').value.trim();
-    const password = $('#loginPassword').value;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
-    // onAuthStateChange handles the rest (loading profile + showing the app)
-  } catch (err) {
-    $('#authError').textContent = err.message || 'Could not log in.';
-  } finally {
-    setAuthBusy(false);
+function openCreateJoin(){
+  renderModal(`
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>Create or Join Convoy</h3>
+    <div class="tabs">
+      <button class="tab-btn active" id="cj-tab-create" onclick="cjTab('create')">Create</button>
+      <button class="tab-btn" id="cj-tab-join" onclick="cjTab('join')">Join</button>
+    </div>
+    <div id="cj-create">
+      <div class="field"><label>Convoy Name</label><input id="cj-name" placeholder="Weekend Road Trip"></div>
+      <button class="btn" onclick="createConvoy()">Create Convoy</button>
+    </div>
+    <div id="cj-join" class="hidden">
+      <div class="field"><label>Convoy Code</label><input id="cj-code" placeholder="ABC123" style="text-transform:uppercase;"></div>
+      <button class="btn" onclick="joinConvoy()">Join Convoy</button>
+    </div>
+    <div id="cj-err" class="error-msg"></div>
+  `);
+}
+function cjTab(t){
+  $('cj-tab-create').classList.toggle('active',t==='create');
+  $('cj-tab-join').classList.toggle('active',t==='join');
+  $('cj-create').classList.toggle('hidden',t!=='create');
+  $('cj-join').classList.toggle('hidden',t!=='join');
+}
+
+async function createConvoy(){
+  const name=$('cj-name').value.trim();
+  if(!name){ $('cj-err').textContent='Enter a convoy name.'; return; }
+  const {data:codeData}=await sb.rpc('generate_convoy_code');
+  const code = codeData || uuidShort().toUpperCase();
+  const {data:convoy,error}=await sb.from('convoys').insert({name, code, creator_id:currentUser.id}).select().single();
+  if(error){ $('cj-err').textContent=error.message; return; }
+  await sb.from('convoy_members').insert({convoy_id:convoy.id, user_id:currentUser.id, role:'owner', can_manage_route:true});
+  await sb.from('saved_convoys').insert({user_id:currentUser.id, convoy_id:convoy.id});
+  closeModal();
+  await loadMyConvoys();
+  enterConvoy(convoy);
+}
+
+async function joinConvoy(){
+  const code=$('cj-code').value.trim().toUpperCase();
+  if(!code){ $('cj-err').textContent='Enter a convoy code.'; return; }
+  const {data:convoy,error}=await sb.from('convoys').select('*').eq('code',code).single();
+  if(error||!convoy){ $('cj-err').textContent='Convoy not found.'; return; }
+  const {error:joinErr}=await sb.from('convoy_members').upsert(
+    {convoy_id:convoy.id, user_id:currentUser.id, role:'member'}, {onConflict:'convoy_id,user_id', ignoreDuplicates:false}
+  );
+  if(joinErr){ $('cj-err').textContent=joinErr.message; return; }
+  await sb.from('saved_convoys').upsert({user_id:currentUser.id, convoy_id:convoy.id}, {onConflict:'user_id,convoy_id'});
+  closeModal();
+  await loadMyConvoys();
+  enterConvoy(convoy);
+}
+
+/* rejoin from saved list if membership was left */
+async function enterConvoy(convoy){
+  const {data:existing}=await sb.from('convoy_members').select('*').eq('convoy_id',convoy.id).eq('user_id',currentUser.id).maybeSingle();
+  if(!existing){
+    await sb.from('convoy_members').insert({convoy_id:convoy.id, user_id:currentUser.id, role:'member'});
   }
-});
+  await openConvoyDetail(convoy);
+}
 
-$('#formSignup').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  $('#authError').textContent = '';
-  setAuthBusy(true);
-  try {
-    if (!supabase) throw new Error(SUPABASE_CONFIG_ERROR || 'Supabase is not configured.');
-    const full_name = $('#suFullName').value.trim();
-    const username = $('#suUsername').value.trim();
-    const email = $('#suEmail').value.trim();
-    const mobile_number = $('#suMobile').value.trim();
-    const blood_group = $('#suBloodGroup').value;
-    const password = $('#suPassword').value;
+/* ======================================================================
+   CONVOY DETAIL
+   ====================================================================== */
+async function openConvoyDetail(convoy){
+  activeConvoy = convoy;
+  const {data:mem}=await sb.from('convoy_members').select('*').eq('convoy_id',convoy.id).eq('user_id',currentUser.id).single();
+  activeMembership = mem;
 
-    if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) throw new Error('Username must be 3-20 letters, numbers, or underscores.');
-    if (!blood_group) throw new Error('Please select a blood group.');
+  hide('view-home'); show('view-convoy');
+  $('convoy-title').textContent = convoy.name;
+  $('route-search-box').classList.toggle('hidden', !(mem.role!=='member' || mem.can_manage_route));
 
-    const { data, error } = await supabase.auth.signUp({
-      email, password,
-      options: { data: { full_name, username, mobile_number, blood_group } }
+  initMap();
+  await loadMembers();
+  await loadRoute();
+  subscribeConvoyRealtime();
+  startLocationTracking();
+  initPTT();
+}
+
+function initMap(){
+  if(map){ map.remove(); map=null; markerLayer={}; }
+  map = L.map('map',{zoomControl:true}).setView([20.5937,78.9629], 5);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'&copy; OpenStreetMap contributors', maxZoom:19
+  }).addTo(map);
+}
+
+async function loadMembers(){
+  const {data:rows}=await sb.from('convoy_members').select('*, profiles(*)').eq('convoy_id',activeConvoy.id);
+  members={};
+  (rows||[]).forEach(r=>{
+    members[r.user_id]={ member:r, profile:r.profiles, location:null, online:false };
+  });
+  const {data:locs}=await sb.from('locations').select('*').eq('convoy_id',activeConvoy.id);
+  (locs||[]).forEach(l=>{ if(members[l.user_id]) members[l.user_id].location=l; });
+  renderMemberList();
+  renderMarkers();
+}
+
+async function loadRoute(){
+  const {data}=await sb.from('route_points').select('*').eq('convoy_id',activeConvoy.id).maybeSingle();
+  if(data) drawRoute(data.origin_lat,data.origin_lng,data.dest_lat,data.dest_lng,data.dest_label);
+}
+
+function renderMemberList(){
+  const list=$('member-list'); list.innerHTML='';
+  const isOwnerOrAdmin = activeMembership && (activeMembership.role==='owner'||activeMembership.role==='admin');
+  Object.values(members).sort((a,b)=>(a.profile.username||'').localeCompare(b.profile.username||'')).forEach(m=>{
+    const dist = (m.location && lastPos) ? haversine(lastPos.lat,lastPos.lng,m.location.lat,m.location.lng) : null;
+    const isMe = m.profile.id===currentUser.id;
+    const online = m.online || (m.location && (Date.now()-new Date(m.location.updated_at).getTime() < 25000));
+    const div=document.createElement('div');
+    div.className='member-item'+(m.speaking?' speaking':'');
+    div.id='member-'+m.profile.id;
+    div.innerHTML=`
+      <div class="status-dot ${online?'online':''}"></div>
+      <div class="m-info">
+        <div class="m-name">@${m.profile.username}${isMe?' (you)':''} ${m.member.role!=='member'?'<span class="badge">'+m.member.role.toUpperCase()+'</span>':''}</div>
+        <div class="m-meta">Speed: ${fmtSpeed(m.location? m.location.speed: null)} • Dist: ${isMe?'0 m':fmtDist(dist)} • ${timeAgo(m.location?m.location.updated_at:null)}</div>
+      </div>
+      ${isOwnerOrAdmin && !isMe ? `
+        <button class="mini-btn" onclick="toggleRouteAccess('${m.profile.id}', ${!m.member.can_manage_route})">${m.member.can_manage_route?'Revoke Route':'Grant Route'}</button>
+        <button class="mini-btn" onclick="removeMember('${m.profile.id}')">Remove</button>
+      ` : ''}
+    `;
+    list.appendChild(div);
+  });
+}
+
+function renderMarkers(){
+  Object.values(members).forEach(m=>{
+    if(!m.location) return;
+    const isMe = m.profile.id===currentUser.id;
+    const color = isMe ? '#2563eb' : '#16a34a';
+    const icon = L.divIcon({
+      className:'', html:`<div style="background:${color};color:#fff;border-radius:50%;width:34px;height:34px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.4);transform:rotate(${m.location.heading||0}deg);">${initials(m.profile.username).slice(0,2)}</div>`,
+      iconSize:[34,34], iconAnchor:[17,17]
     });
-    if (error) throw error;
-
-    if (data.session) {
-      // Email confirmation is off in this project — the user is signed in immediately.
-      toast('Account created!', 'success');
+    if(markerLayer[m.profile.id]){
+      markerLayer[m.profile.id].setLatLng([m.location.lat,m.location.lng]).setIcon(icon);
     } else {
-      // Email confirmation is required by the Supabase Auth settings.
-      $('#authNote').textContent = 'Account created! Please check your email to confirm your address, then log in.';
-      $$('.auth-tab')[0].click();
-    }
-  } catch (err) {
-    $('#authError').textContent = err.message || 'Could not sign up.';
-  } finally {
-    setAuthBusy(false);
-  }
-});
-
-async function loadMyProfile(userId, retriesLeft = 4) {
-  const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-  if (error) throw error;
-  if (!data && retriesLeft > 0) {
-    // The profile row is created by a database trigger right after sign-up;
-    // give it a brief moment in case this fires before the trigger commits.
-    await new Promise(r => setTimeout(r, 400));
-    return loadMyProfile(userId, retriesLeft - 1);
-  }
-  return data;
-}
-
-async function handleSignedIn(session) {
-  App.session = session;
-  try {
-    App.profile = await loadMyProfile(session.user.id);
-    if (!App.profile) throw new Error('Profile not found. Please try logging in again.');
-  } catch (err) {
-    toast(err.message, 'error');
-    await supabase.auth.signOut();
-    return;
-  }
-  showAppScreen();
-  populateProfileForm();
-  refreshConvoysList();
-  loadAds();
-}
-
-function handleSignedOut() {
-  exitConvoyRoom(); // tear down GPS/mic/channels FIRST, while App.profile is still set
-  App.session = null;
-  App.profile = null;
-  $('#appScreen').classList.add('hidden');
-  $('#authScreen').classList.remove('hidden');
-  $('#formLogin').reset();
-  $('#formSignup').reset();
-}
-
-if (supabase) {
-  supabase.auth.onAuthStateChange((event, session) => {
-    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
-      if (session) { App.session = session; if (!App.profile) handleSignedIn(session); }
-    } else if (event === 'SIGNED_OUT') {
-      handleSignedOut();
+      markerLayer[m.profile.id]=L.marker([m.location.lat,m.location.lng],{icon}).addTo(map)
+        .bindPopup(`<b>@${m.profile.profile? '' : m.profile.username}</b>`);
+      markerLayer[m.profile.id].bindPopup(()=> `<b>@${m.profile.username}</b><br>${fmtSpeed(m.location.speed)}<br>${timeAgo(m.location.updated_at)}`);
     }
   });
+  const pts=Object.values(members).filter(m=>m.location).map(m=>[m.location.lat,m.location.lng]);
+  if(pts.length && !map._userMoved){ map.fitBounds(pts,{maxZoom:15,padding:[40,40]}); }
 }
-
-$('#logoutBtn').addEventListener('click', async () => {
-  const ok = await showConfirm('Log out?', 'You will need to log back in to see your convoys.');
-  if (!ok) return;
-  await supabase.auth.signOut();
-});
-
-function showAppScreen() {
-  $('#authScreen').classList.add('hidden');
-  $('#appScreen').classList.remove('hidden');
-}
-
-
-/* ============================================================================
-   8. BOTTOM NAV / TABS
-   ============================================================================ */
-$$('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    $$('.nav-btn').forEach(b => b.classList.remove('active'));
-    $$('.tab-panel').forEach(p => p.classList.remove('active'));
-    btn.classList.add('active');
-    $('#' + btn.dataset.tab).classList.add('active');
-  });
-});
-
-/* ============================================================================
-   9. PROFILE TAB
-   ============================================================================ */
-function populateProfileForm() {
-  const p = App.profile;
-  if (!p) return;
-  $('#profileAvatar').textContent = initials(p.full_name || p.username);
-  $('#profileFullName').textContent = p.full_name || p.username;
-  $('#profileUsername').textContent = '@' + p.username;
-  $('#editFullName').value = p.full_name || '';
-  $('#editUsername').value = p.username || '';
-  $('#editMobile').value = p.mobile_number || '';
-  $('#editBloodGroup').value = p.blood_group || 'Unknown';
-  $('#editEmail').value = p.email || '';
-  $('#globalLocationToggle').checked = !!p.location_enabled;
-}
-
-$('#saveProfileBtn').addEventListener('click', async () => {
-  const btn = $('#saveProfileBtn');
-  const full_name = $('#editFullName').value.trim();
-  const username = $('#editUsername').value.trim();
-  const mobile_number = $('#editMobile').value.trim();
-  const blood_group = $('#editBloodGroup').value;
-
-  if (!/^[a-zA-Z0-9_]{3,20}$/.test(username)) {
-    toast('Username must be 3-20 letters, numbers, or underscores.', 'error');
-    return;
-  }
-
-  btn.disabled = true;
-  try {
-    const { data, error } = await supabase.from('profiles')
-      .update({ full_name, username, mobile_number, blood_group })
-      .eq('id', App.profile.id)
-      .select().single();
-    if (error) {
-      if (error.code === '23505') throw new Error('That username is already taken.');
-      throw error;
-    }
-    App.profile = data;
-    populateProfileForm();
-    toast('Profile updated', 'success');
-  } catch (err) {
-    toast(err.message || 'Could not save profile', 'error');
-  } finally {
-    btn.disabled = false;
-  }
-});
-
-$('#globalLocationToggle').addEventListener('change', async (e) => {
-  const checked = e.target.checked;
-  try {
-    const { data, error } = await supabase.from('profiles')
-      .update({ location_enabled: checked }).eq('id', App.profile.id).select().single();
-    if (error) throw error;
-    App.profile = data;
-    toast(checked ? 'Location sharing is back on' : 'Location sharing turned off everywhere', checked ? 'success' : 'warn');
-    if (!checked && App.room) stopGeolocationWatch(); // immediate effect in the open room
-    else if (checked && App.room) startGeolocationWatch();
-  } catch (err) {
-    e.target.checked = !checked;
-    toast(err.message || 'Could not update setting', 'error');
-  }
-});
-
-
-/* ============================================================================
-   10. ADS TAB
-   ============================================================================ */
-async function loadAds() {
-  const { data, error } = await supabase.from('ads')
-    .select('*').eq('is_active', true)
-    .order('display_order', { ascending: true }).order('created_at', { ascending: false });
-  if (error) { console.warn(error); return; }
-  App.ads = data || [];
-  renderAds();
-  $('#manageAdsBtn').classList.toggle('hidden', !(App.profile && App.profile.is_admin));
-}
-
-function renderAds() {
-  const list = $('#adsList');
-  if (!App.ads.length) {
-    list.innerHTML = `<div class="empty-state"><div class="emoji">📣</div><p>No ads right now. Check back later.</p></div>`;
-    return;
-  }
-  list.innerHTML = App.ads.map(ad => `
-    <div class="ad-card">
-      <div class="ad-sponsor-tag">Sponsored</div>
-      ${ad.media_type === 'video'
-        ? `<video class="ad-media" src="${escapeHTML(ad.media_url)}" controls playsinline muted loop></video>`
-        : `<img class="ad-media" src="${escapeHTML(ad.media_url)}" alt="${escapeHTML(ad.title)}" loading="lazy" />`}
-      <div class="ad-body">
-        <h3>${escapeHTML(ad.title)}</h3>
-        ${ad.description ? `<p>${escapeHTML(ad.description)}</p>` : ''}
-        ${ad.link_url ? `<a class="ad-link" href="${escapeHTML(ad.link_url)}" target="_blank" rel="noopener noreferrer">Learn more →</a>` : ''}
-      </div>
-    </div>
-  `).join('');
-}
-
-// ---- Admin ad management ----
-$('#manageAdsBtn').addEventListener('click', () => { openModal('modalAdsAdmin'); loadAdsAdmin(); resetAdEditor(); });
-
-function resetAdEditor() {
-  $('#adEditId').value = '';
-  $('#adTitle').value = '';
-  $('#adDescription').value = '';
-  $('#adMediaUrl').value = '';
-  $('#adMediaType').value = 'image';
-  $('#adOrder').value = '0';
-  $('#adLinkUrl').value = '';
-  $('#adActive').checked = true;
-  $('#adSaveBtn').textContent = 'Save Ad';
-  $('#adNewBtn').classList.add('hidden');
-}
-$('#adNewBtn').addEventListener('click', resetAdEditor);
-
-async function loadAdsAdmin() {
-  const { data, error } = await supabase.from('ads').select('*').order('display_order', { ascending: true });
-  if (error) { toast(error.message, 'error'); return; }
-  const list = $('#adsAdminList');
-  if (!data.length) { list.innerHTML = `<p style="color:var(--text-faint); font-size:13px;">No ads yet.</p>`; return; }
-  list.innerHTML = data.map(ad => `
-    <div class="member-manage-row">
-      <span class="mm-name">${escapeHTML(ad.title)} ${ad.is_active ? '' : '<span class="pill">inactive</span>'}</span>
-      <div class="mm-actions">
-        <button class="btn btn-sm" data-edit-ad="${ad.id}">Edit</button>
-        <button class="btn btn-sm btn-danger" data-delete-ad="${ad.id}">Delete</button>
-      </div>
-    </div>
-  `).join('');
-  $$('[data-edit-ad]').forEach(b => b.addEventListener('click', () => editAd(b.dataset.editAd, data)));
-  $$('[data-delete-ad]').forEach(b => b.addEventListener('click', () => deleteAd(b.dataset.deleteAd)));
-}
-
-function editAd(id, list) {
-  const ad = list.find(a => a.id === id);
-  if (!ad) return;
-  $('#adEditId').value = ad.id;
-  $('#adTitle').value = ad.title;
-  $('#adDescription').value = ad.description || '';
-  $('#adMediaUrl').value = ad.media_url;
-  $('#adMediaType').value = ad.media_type;
-  $('#adOrder').value = ad.display_order;
-  $('#adLinkUrl').value = ad.link_url || '';
-  $('#adActive').checked = ad.is_active;
-  $('#adSaveBtn').textContent = 'Update Ad';
-  $('#adNewBtn').classList.remove('hidden');
-}
-
-async function deleteAd(id) {
-  const ok = await showConfirm('Delete this ad?', 'This cannot be undone.');
-  if (!ok) return;
-  const { error } = await supabase.from('ads').delete().eq('id', id);
-  if (error) { toast(error.message, 'error'); return; }
-  toast('Ad deleted', 'success');
-  loadAdsAdmin(); loadAds();
-}
-
-$('#adSaveBtn').addEventListener('click', async () => {
-  const id = $('#adEditId').value;
-  const payload = {
-    title: $('#adTitle').value.trim(),
-    description: $('#adDescription').value.trim() || null,
-    media_url: $('#adMediaUrl').value.trim(),
-    media_type: $('#adMediaType').value,
-    link_url: $('#adLinkUrl').value.trim() || null,
-    display_order: parseInt($('#adOrder').value, 10) || 0,
-    is_active: $('#adActive').checked
-  };
-  if (!payload.title || !payload.media_url) { toast('Title and media URL are required', 'error'); return; }
-
-  try {
-    if (id) {
-      const { error } = await supabase.from('ads').update(payload).eq('id', id);
-      if (error) throw error;
-      toast('Ad updated', 'success');
-    } else {
-      const { error } = await supabase.from('ads').insert({ ...payload, created_by: App.profile.id });
-      if (error) throw error;
-      toast('Ad published', 'success');
-    }
-    resetAdEditor();
-    loadAdsAdmin(); loadAds();
-  } catch (err) {
-    toast(err.message || 'Could not save ad', 'error');
-  }
-});
-
-
-/* ============================================================================
-   11. CONVOYS TAB (WhatsApp-style group list)
-   ============================================================================ */
-async function refreshConvoysList() {
-  if (!App.profile) return;
-  const { data, error } = await supabase
-    .from('convoy_members')
-    .select('role, can_set_route, convoys(*)')
-    .eq('user_id', App.profile.id);
-  if (error) { toast(error.message, 'error'); return; }
-
-  const rows = (data || []).filter(r => r.convoys); // guard against a row whose convoy was deleted
-  const withCounts = await Promise.all(rows.map(async r => {
-    const { count } = await supabase.from('convoy_members')
-      .select('*', { count: 'exact', head: true }).eq('convoy_id', r.convoys.id);
-    return { convoy: r.convoys, role: r.role, can_set_route: r.can_set_route, memberCount: count || 1 };
-  }));
-  withCounts.sort((a, b) => new Date(b.convoy.created_at) - new Date(a.convoy.created_at));
-  App.convoys = withCounts;
-  renderConvoysList();
-}
-
-function renderConvoysList() {
-  const list = $('#convoysList');
-  if (!App.convoys.length) {
-    list.innerHTML = `<div class="empty-state"><div class="emoji">🚙</div><p>No convoys yet. Create one or join with a code from a friend.</p></div>`;
-    return;
-  }
-  list.innerHTML = App.convoys.map(({ convoy, role, memberCount }) => `
-    <div class="convoy-row" data-open-convoy="${convoy.id}">
-      <div class="convoy-avatar">${escapeHTML(initials(convoy.name))}</div>
-      <div class="convoy-row-main">
-        <div class="convoy-row-top">
-          <span class="name">${escapeHTML(convoy.name)}</span>
-          <span class="code mono">${escapeHTML(convoy.code)}</span>
-        </div>
-        <div class="convoy-row-sub">
-          <span>${memberCount} member${memberCount === 1 ? '' : 's'}</span>
-          ${role === 'creator' ? '<span class="pill you">Creator</span>' : ''}
-          ${role === 'navigator' ? '<span class="pill go">Navigator</span>' : ''}
-          ${convoy.is_muted ? '<span class="pill">🔇 Silenced</span>' : ''}
-        </div>
-      </div>
-    </div>
-  `).join('');
-  $$('[data-open-convoy]').forEach(row => {
-    row.addEventListener('click', () => enterConvoyRoom(row.dataset.openConvoy));
-  });
-}
-
-$('#openCreateConvoyBtn').addEventListener('click', () => { $('#newConvoyName').value = ''; openModal('modalCreateConvoy'); });
-$('#openJoinConvoyBtn').addEventListener('click', () => { $('#joinConvoyCode').value = ''; openModal('modalJoinConvoy'); });
-
-$('#createConvoySubmitBtn').addEventListener('click', async () => {
-  const name = $('#newConvoyName').value.trim();
-  if (!name) { toast('Please name your convoy', 'error'); return; }
-  const btn = $('#createConvoySubmitBtn'); btn.disabled = true;
-  try {
-    const { data, error } = await supabase.from('convoys')
-      .insert({ name, creator_id: App.profile.id }).select().single();
-    if (error) throw error;
-    closeModal('modalCreateConvoy');
-    toast(`Convoy created! Code: ${data.code}`, 'success');
-    await refreshConvoysList();
-    enterConvoyRoom(data.id);
-  } catch (err) {
-    toast(err.message || 'Could not create convoy', 'error');
-  } finally { btn.disabled = false; }
-});
-
-$('#joinConvoySubmitBtn').addEventListener('click', async () => {
-  const code = $('#joinConvoyCode').value.trim();
-  if (code.length < 4) { toast('Enter a valid convoy code', 'error'); return; }
-  const btn = $('#joinConvoySubmitBtn'); btn.disabled = true;
-  try {
-    const { data, error } = await supabase.rpc('join_convoy_by_code', { p_code: code });
-    if (error) throw error;
-    closeModal('modalJoinConvoy');
-    toast(`Joined ${data.name}`, 'success');
-    await refreshConvoysList();
-    enterConvoyRoom(data.id);
-  } catch (err) {
-    toast(err.message || 'Could not join convoy', 'error');
-  } finally { btn.disabled = false; }
-});
-
-
-/* ============================================================================
-   12. CONVOY ROOM — enter / exit lifecycle
-   ============================================================================
-   Only ONE convoy can be "live" (GPS + voice actively streaming) at a time.
-   Opening a convoy from the list always tears down any previously active
-   room first. Exiting the room (back arrow) stops the live session but
-   keeps your membership — you stay in the group, like closing a WhatsApp
-   chat. "Leave This Convoy" in Settings is the separate, permanent action
-   that actually removes you from the group.
-   ============================================================================ */
-
-async function enterConvoyRoom(convoyId) {
-  if (App.room && App.room.convoyId === convoyId) { $('#convoyRoom').classList.add('active'); return; }
-  if (App.room) exitConvoyRoom(); // enforce single active live session
-
-  App.room = freshRoomState(convoyId);
-  $('#convoyRoom').classList.add('active');
-  $('#roomConvoyName').textContent = 'Loading…';
-  $('#gpsBanner').classList.add('hidden');
-
-  try {
-    await loadRoomData(convoyId);
-  } catch (err) {
-    toast(err.message || 'Could not open this convoy', 'error');
-    exitConvoyRoom();
-    return;
-  }
-
-  initRoomMap();
-  renderRoomHeader();
-  renderMemberDrawer();
-  applyPttUiForConvoyState();
-
-  subscribeRoomRealtime();
-  await joinPresence();
-  startGeolocationWatch();
-  acquireWakeLock();
-
-  App.room.clockTimer = setInterval(() => { renderMemberDrawer(); refreshMarkerPopups(); }, 5000);
-}
-
-async function loadRoomData(convoyId) {
-  const room = App.room;
-
-  const { data: convoy, error: convoyErr } = await supabase.from('convoys').select('*').eq('id', convoyId).single();
-  if (convoyErr) throw new Error('Convoy not found, or you are not a member.');
-  room.convoy = convoy;
-
-  const { data: myMember, error: memErr } = await supabase.from('convoy_members')
-    .select('role, can_set_route').eq('convoy_id', convoyId).eq('user_id', App.profile.id).single();
-  if (memErr) throw new Error('You are not a member of this convoy.');
-  room.myMembership = myMember;
-
-  // Two separate queries rather than a PostgREST embedded join: `public_profiles`
-  // is a view (not the table the convoy_members.user_id foreign key points at),
-  // so PostgREST cannot auto-embed it. Fetching it separately and merging here
-  // also sidesteps any RLS-recursion surprises.
-  const { data: members, error: membersErr } = await supabase.from('convoy_members')
-    .select('user_id, role, can_set_route').eq('convoy_id', convoyId);
-  if (membersErr) throw membersErr;
-
-  const userIds = members.map(m => m.user_id);
-  const { data: profilesData, error: profilesErr } = await supabase
-    .from('public_profiles').select('id, username, full_name, blood_group').in('id', userIds);
-  if (profilesErr) throw profilesErr;
-  const profileMap = new Map((profilesData || []).map(p => [p.id, p]));
-
-  members.forEach(m => {
-    const p = profileMap.get(m.user_id) || {};
-    room.members.set(m.user_id, {
-      username: p.username || 'unknown',
-      full_name: p.full_name || '',
-      blood_group: p.blood_group || '',
-      role: m.role, can_set_route: m.can_set_route
-    });
-  });
-
-  const { data: locs } = await supabase.from('locations').select('*').eq('convoy_id', convoyId);
-  (locs || []).forEach(l => {
-    room.presenceState.set(l.user_id, {
-      lat: l.lat, lng: l.lng, heading: l.heading, speed: l.speed, accuracy: l.accuracy,
-      updated_at: l.updated_at, talking: false, online: false
-    });
-  });
-
-  const { data: vis } = await supabase.from('location_visibility')
-    .select('is_visible').eq('convoy_id', convoyId).eq('user_id', App.profile.id).maybeSingle();
-  room.myVisible = vis ? vis.is_visible : true;
-
-  const { data: route } = await supabase.from('convoy_routes').select('*').eq('convoy_id', convoyId).maybeSingle();
-  room.routeDestination = route || null;
-}
-
-function canSetRoute() {
-  const room = App.room;
-  if (!room || !room.myMembership) return false;
-  return room.myMembership.role === 'creator' || room.myMembership.role === 'navigator' || room.myMembership.can_set_route;
-}
-function isCreator() {
-  return App.room && App.room.myMembership && App.room.myMembership.role === 'creator';
-}
-
-function renderRoomHeader() {
-  const room = App.room;
-  $('#roomConvoyName').textContent = room.convoy.name;
-  $('#roomConvoyCode').textContent = room.convoy.code;
-  $('#routeBar').classList.toggle('hidden', !canSetRoute());
-  updateOnlineCount();
-}
-
-function updateOnlineCount() {
-  const room = App.room;
-  if (!room) return;
-  let online = 0;
-  room.presenceState.forEach(p => { if (p.online) online++; });
-  $('#roomOnlineCount').textContent = `${online} online · ${room.members.size} member${room.members.size === 1 ? '' : 's'}`;
-}
-
-function exitConvoyRoom() {
-  const room = App.room;
-  if (!room) { $('#convoyRoom').classList.remove('active'); return; }
-
-  stopGeolocationWatch();
-  teardownWebRTC();
-
-  if (room.presenceChannel) { supabase.removeChannel(room.presenceChannel); room.presenceChannel = null; }
-  room.dbChannels.forEach(ch => supabase.removeChannel(ch));
-  room.dbChannels = [];
-
-  if (room.clockTimer) clearInterval(room.clockTimer);
-  if (room.dbPersistTimer) clearInterval(room.dbPersistTimer);
-  if (room.routeUpdateTimer) clearInterval(room.routeUpdateTimer);
-
-  releaseWakeLock();
-
-  if (room.map) { room.map.remove(); room.map = null; }
-
-  App.room = null;
-  $('#convoyRoom').classList.remove('active');
-  $('#routeResults').classList.add('hidden');
-  refreshConvoysList();
-}
-
-$('#exitRoomBtn').addEventListener('click', () => exitConvoyRoom());
-
-function rejoinRoomChannels() {
-  if (!App.room) return;
-  const convoyId = App.room.convoyId;
-  // Cheapest reliable fix for a dropped websocket: fully re-enter the room.
-  enterConvoyRoom(convoyId);
-}
-
-
-/* ============================================================================
-   13. MAP + MARKERS
-   ============================================================================ */
-function initRoomMap() {
-  const room = App.room;
-  const startLoc = room.presenceState.get(App.profile.id);
-  const center = startLoc ? [startLoc.lat, startLoc.lng] : [20.5937, 78.9629]; // fallback: India center
-  room.map = L.map('map', { zoomControl: true, attributionControl: true }).setView(center, startLoc ? 14 : 5);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
-    attribution: '&copy; OpenStreetMap contributors'
-  }).addTo(room.map);
-
-  room.presenceState.forEach((data, userId) => upsertMarker(userId, data));
-  if (room.routeDestination) drawRoute(room.routeDestination);
-}
-
-function memberDisplayName(userId) {
-  const room = App.room;
-  if (userId === App.profile.id) return App.profile.username;
-  const m = room.members.get(userId);
-  return m ? m.username : 'member';
-}
-
-function buildMarkerIcon(userId, data) {
-  const isMe = userId === App.profile.id;
-  const online = !!data.online;
-  const label = escapeHTML((memberDisplayName(userId) || '?').slice(0, 2).toUpperCase());
-  const rotation = (data.heading !== null && data.heading !== undefined) ? data.heading : null;
-  const arrow = rotation !== null
-    ? `<div class="heading-arrow" style="transform: translateX(-50%) rotate(${rotation}deg);"></div>` : '';
-  const talkRing = data.talking ? `<div class="talk-ring"></div>` : '';
-  return L.divIcon({
-    className: '',
-    html: `<div class="member-marker ${isMe ? 'me' : ''} ${online ? '' : 'offline'}">
-             <div class="pin">${label}${talkRing}</div>${arrow}
-           </div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    popupAnchor: [0, -18]
-  });
-}
-
-function popupHtml(userId, data) {
-  const isMe = userId === App.profile.id;
-  const name = escapeHTML(memberDisplayName(userId));
-  const mine = App.room.presenceState.get(App.profile.id);
-  const dist = (!isMe && mine && data.lat != null)
-    ? formatDistance(distanceMeters(mine.lat, mine.lng, data.lat, data.lng)) : null;
-  return `
-    <div style="font-family:'Space Grotesk',sans-serif; min-width:150px;">
-      <strong>${name}${isMe ? ' (you)' : ''}</strong><br/>
-      <span style="font-size:12px; color:#888;">
-        ${formatSpeed(data.speed)} ${dist ? '· ' + dist + ' away' : ''}<br/>
-        Updated ${formatRelativeTime(data.updated_at)} · ${data.online ? 'Online' : 'Offline'}
-      </span>
-    </div>`;
-}
-
-function upsertMarker(userId, data) {
-  const room = App.room;
-  if (!room || !room.map || data.lat == null || data.lng == null) return;
-  let marker = room.markers.get(userId);
-  if (!marker) {
-    marker = L.marker([data.lat, data.lng], { icon: buildMarkerIcon(userId, data) }).addTo(room.map);
-    marker.bindPopup(popupHtml(userId, data));
-    room.markers.set(userId, marker);
-  } else {
-    marker.setLatLng([data.lat, data.lng]);
-    marker.setIcon(buildMarkerIcon(userId, data));
-    if (marker.getPopup() && marker.getPopup().isOpen()) marker.setPopupContent(popupHtml(userId, data));
-    else marker.bindPopup(popupHtml(userId, data));
-  }
-}
-
-function removeMarker(userId) {
-  const room = App.room;
-  if (!room) return;
-  const marker = room.markers.get(userId);
-  if (marker) { room.map.removeLayer(marker); room.markers.delete(userId); }
-}
-
-function refreshMarkerPopups() {
-  const room = App.room;
-  if (!room) return;
-  room.presenceState.forEach((data, userId) => {
-    const marker = room.markers.get(userId);
-    if (marker && marker.getPopup()) marker.setPopupContent(popupHtml(userId, data));
-  });
-}
-
-/* ============================================================================
-   14. MEMBER DRAWER (bottom sheet list)
-   ============================================================================ */
-$('#drawerHandle').addEventListener('click', () => {
-  const room = App.room; if (!room) return;
-  room.drawerCollapsed = !room.drawerCollapsed;
-  $('#memberDrawer').classList.toggle('collapsed', room.drawerCollapsed);
-});
-
-function renderMemberDrawer() {
-  const room = App.room;
-  if (!room) return;
-  updateOnlineCount();
-  const mine = room.presenceState.get(App.profile.id);
-  const rows = [];
-  // "me" first
-  const allIds = [App.profile.id, ...Array.from(room.members.keys()).filter(id => id !== App.profile.id)];
-  allIds.forEach(userId => {
-    const meta = userId === App.profile.id
-      ? { username: App.profile.username, blood_group: App.profile.blood_group, role: room.myMembership.role }
-      : room.members.get(userId);
-    if (!meta) return;
-    const data = room.presenceState.get(userId) || {};
-    const dist = (userId !== App.profile.id && mine && data.lat != null)
-      ? formatDistance(distanceMeters(mine.lat, mine.lng, data.lat, data.lng)) : null;
-    rows.push(`
-      <div class="member-item">
-        <div class="mi-avatar">${escapeHTML(initials(meta.username))}
-          <span class="status-dot ${data.online ? 'online' : ''}"></span>
-        </div>
-        <div class="mi-main">
-          <div class="mi-name">${escapeHTML(meta.username)}${userId === App.profile.id ? ' (you)' : ''}
-            ${meta.role === 'creator' ? '<span class="pill you">Creator</span>' : ''}
-            ${meta.role === 'navigator' ? '<span class="pill go">Navigator</span>' : ''}
-            <span class="mic-badge ${data.talking ? 'on' : ''}">🎙️ talking</span>
-          </div>
-          <div class="mi-meta">
-            <span>${data.lat != null ? formatSpeed(data.speed) : 'no location'}</span>
-            ${dist ? `<span>${dist} away</span>` : ''}
-            <span>${data.lat != null ? formatRelativeTime(data.updated_at) : ''}</span>
-          </div>
-        </div>
-      </div>
-    `);
-  });
-  $('#memberList').innerHTML = rows.join('') || `<p style="color:var(--text-faint); font-size:13px; padding:10px 0;">No members yet.</p>`;
-  $('#drawerCount').textContent = allIds.length;
-}
-
-
-/* ============================================================================
-   15. GEOLOCATION — adaptive, battery-conscious tracking
-   ============================================================================ */
-function startGeolocationWatch() {
-  const room = App.room;
-  if (!room) return;
-  if (!App.profile.location_enabled) { showGpsBanner('Location sharing is turned off in your profile.', 'Turn on', () => { switchToProfileAndEnableLocation(); }); return; }
-  if (!('geolocation' in navigator)) { showGpsBanner('This device does not support GPS.', null, null); return; }
-  if (room.watchId !== null) return; // already watching
-
-  room.watchId = navigator.geolocation.watchPosition(onGeoPosition, onGeoError, {
-    enableHighAccuracy: true, maximumAge: 2000, timeout: 15000
-  });
-
-  room.dbPersistTimer = setInterval(persistMyLocationToDb, DB_PERSIST_INTERVAL_MS);
-}
-
-function stopGeolocationWatch() {
-  const room = App.room;
-  if (!room) return;
-  if (room.watchId !== null) { navigator.geolocation.clearWatch(room.watchId); room.watchId = null; }
-  if (room.dbPersistTimer) { clearInterval(room.dbPersistTimer); room.dbPersistTimer = null; }
-}
-
-function showGpsBanner(text, actionLabel, actionFn) {
-  $('#gpsBannerText').textContent = text;
-  const retryBtn = $('#gpsBannerRetry');
-  retryBtn.style.display = actionFn ? 'inline-block' : 'none';
-  retryBtn.textContent = actionLabel || 'Retry';
-  retryBtn.onclick = actionFn || (() => {});
-  $('#gpsBanner').classList.remove('hidden');
-}
-function hideGpsBanner() { $('#gpsBanner').classList.add('hidden'); }
-
-function switchToProfileAndEnableLocation() {
-  $('.nav-btn[data-tab="tabProfile"]').click();
-  toast('Turn on "Share my location" below', '');
-}
-
-$('#gpsBannerRetry').addEventListener('click', () => startGeolocationWatch());
-
-function onGeoError(err) {
-  let msg = 'Could not get your location.';
-  if (err.code === err.PERMISSION_DENIED) msg = 'Location permission denied. Enable it in your browser/device settings to share your position.';
-  else if (err.code === err.POSITION_UNAVAILABLE) msg = 'Location unavailable right now.';
-  else if (err.code === err.TIMEOUT) msg = 'Location request timed out. Retrying…';
-  showGpsBanner(msg, 'Retry', () => { hideGpsBanner(); startGeolocationWatch(); });
-}
-
-function onGeoPosition(pos) {
-  const room = App.room;
-  if (!room) return;
-  hideGpsBanner();
-  const { latitude: lat, longitude: lng, heading, speed, accuracy } = pos.coords;
-  const now = Date.now();
-
-  // Adaptive throttle: slow down updates while stationary to save battery.
-  const isMoving = speed != null && speed > STATIONARY_SPEED_MS;
-  if (isMoving) room.lastMovingAt = now;
-  const stationaryFor = now - room.lastMovingAt;
-  const interval = stationaryFor > STATIONARY_GRACE_MS ? LOCATION_SLOW_INTERVAL_MS : LOCATION_FAST_INTERVAL_MS;
-  if (now - room.lastSentAt < interval) return;
-  room.lastSentAt = now;
-
-  room.myLocation = {
-    lat, lng,
-    heading: (heading != null && !isNaN(heading)) ? heading : null,
-    speed: (speed != null && !isNaN(speed)) ? speed : 0,
-    accuracy, updated_at: new Date().toISOString()
-  };
-
-  // Update my own marker instantly (don't wait for the presence round-trip)
-  const myState = { ...room.myLocation, talking: room.talking, online: true };
-  room.presenceState.set(App.profile.id, myState);
-  upsertMarker(App.profile.id, myState);
-  renderMemberDrawer();
-
-  if (!room.mapCenteredOnMe && room.map) {
-    room.map.setView([lat, lng], 14);
-    room.mapCenteredOnMe = true;
-  }
-
-  // Broadcast to the rest of the convoy via Presence (cheap, frequent)
-  trackMyPresence();
-
-  // Keep the shared route's start point current for MY OWN routing view
-  if (room.routingControl && room.routeDestination) updateRouteStart();
-}
-
-async function persistMyLocationToDb() {
-  const room = App.room;
-  if (!room || !room.myLocation || !App.profile.location_enabled) return;
-  const { lat, lng, heading, speed, accuracy, updated_at } = room.myLocation;
-  const { error } = await supabase.from('locations').upsert({
-    convoy_id: room.convoyId, user_id: App.profile.id, lat, lng, heading, speed, accuracy, updated_at
-  }, { onConflict: 'convoy_id,user_id' });
-  if (error) console.warn('Could not persist location:', error.message);
-}
-
-/* ============================================================================
-   16. WAKE LOCK — keep the screen on while actively tracking
-   ============================================================================ */
-async function acquireWakeLock() {
-  try {
-    if ('wakeLock' in navigator && App.room) {
-      App.room.wakeLock = await navigator.wakeLock.request('screen');
-    }
-  } catch (e) { /* not fatal — many browsers/situations disallow this */ }
-}
-function releaseWakeLock() {
-  if (App.room && App.room.wakeLock) {
-    App.room.wakeLock.release().catch(() => {});
-    App.room.wakeLock = null;
-  }
-}
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible' && App.room) acquireWakeLock();
-});
-
-
-/* ============================================================================
-   17. REALTIME PRESENCE — live position broadcast + online/offline + "talking"
-   ============================================================================
-   Presence is used instead of writing to the database on every 2-5s tick:
-   it's cheap, ephemeral, and automatically tells us who is currently online.
-   The `locations` table (written every ~12s, see above) is the durable,
-   RLS-protected fallback so a member who just opened the convoy immediately
-   sees everyone's last known position before Presence has fully synced.
-   ============================================================================ */
-async function joinPresence() {
-  const room = App.room;
-  const channel = supabase.channel(`convoy-${room.convoyId}`, {
-    config: { presence: { key: App.profile.id } }
-  });
-
-  channel.on('presence', { event: 'sync' }, () => {
-    const state = channel.presenceState();
-    const seenIds = new Set();
-    Object.keys(state).forEach(userId => {
-      const presences = state[userId];
-      if (!presences || !presences.length) return;
-      const p = presences[presences.length - 1]; // latest
-      seenIds.add(userId);
-      room.presenceState.set(userId, {
-        lat: p.lat, lng: p.lng, heading: p.heading, speed: p.speed, accuracy: p.accuracy,
-        updated_at: p.updated_at, talking: !!p.talking, online: true
-      });
-      upsertMarker(userId, room.presenceState.get(userId));
-      if (userId !== App.profile.id) ensurePeerConnectionForJoin(userId);
-    });
-    // Anyone previously online but missing from the synced state just went offline.
-    room.presenceState.forEach((data, userId) => {
-      if (!seenIds.has(userId) && data.online) {
-        room.presenceState.set(userId, { ...data, online: false });
+// track manual map interaction so we stop auto-fitting after user pans/zooms
+function markUserMoved(){ map._userMoved=true; }
+
+/* ======================================================================
+   REALTIME SUBSCRIPTIONS (locations, members, speaking, route, presence)
+   ====================================================================== */
+function subscribeConvoyRealtime(){
+  cleanupChannels();
+  const cid=activeConvoy.id;
+
+  locChannel = sb.channel('locations-'+cid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'locations',filter:'convoy_id=eq.'+cid},payload=>{
+      const row=payload.new;
+      if(row && members[row.user_id]){ members[row.user_id].location=row; renderMarkers(); renderMemberList(); }
+    }).subscribe();
+
+  memberChannel = sb.channel('members-'+cid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'convoy_members',filter:'convoy_id=eq.'+cid},async()=>{
+      await loadMembers();
+    }).subscribe();
+
+  speakChannel = sb.channel('speak-'+cid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'speaking_status',filter:'convoy_id=eq.'+cid},payload=>{
+      const row=payload.new;
+      if(row && members[row.user_id]){
+        members[row.user_id].speaking=row.is_speaking;
+        renderMemberList();
+      }
+    }).subscribe();
+
+  routeChannel = sb.channel('route-'+cid)
+    .on('postgres_changes',{event:'*',schema:'public',table:'route_points',filter:'convoy_id=eq.'+cid},payload=>{
+      if(payload.eventType==='DELETE'){ if(routeControl) map.removeControl(routeControl); return; }
+      const r=payload.new;
+      drawRoute(r.origin_lat,r.origin_lng,r.dest_lat,r.dest_lng,r.dest_label);
+    }).subscribe();
+
+  // Presence + WebRTC signaling channel (ephemeral, not persisted)
+  presenceChannel = sb.channel('presence-'+cid,{ config:{ presence:{ key:currentUser.id } } });
+  presenceChannel
+    .on('presence',{event:'sync'},()=>{
+      const state=presenceChannel.presenceState();
+      Object.keys(members).forEach(uid=> members[uid].online = !!state[uid]);
+      renderMemberList();
+    })
+    .on('presence',{event:'join'},({key})=>{
+      if(key!==currentUser.id) connectToPeer(key);
+    })
+    .on('broadcast',{event:'signal'},({payload})=> handleSignal(payload))
+    .subscribe(async(status)=>{
+      if(status==='SUBSCRIBED'){
+        await presenceChannel.track({user_id:currentUser.id, username:myProfile.username, at:Date.now()});
       }
     });
-    renderMemberDrawer();
-    updateOnlineCount();
-  });
-
-  channel.on('presence', { event: 'leave' }, ({ key }) => {
-    const data = room.presenceState.get(key);
-    if (data) room.presenceState.set(key, { ...data, online: false, talking: false });
-    if (key !== App.profile.id) closePeerConnection(key);
-    renderMemberDrawer();
-    updateOnlineCount();
-  });
-
-  await new Promise(resolve => {
-    channel.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        const mine = room.presenceState.get(App.profile.id) || {};
-        await channel.track({
-          user_id: App.profile.id, username: App.profile.username,
-          lat: mine.lat ?? null, lng: mine.lng ?? null, heading: mine.heading ?? null,
-          speed: mine.speed ?? 0, accuracy: mine.accuracy ?? null,
-          updated_at: new Date().toISOString(), talking: false
-        });
-        resolve();
-      }
-    });
-  });
-
-  room.presenceChannel = channel;
+  signalChannel = presenceChannel;
 }
 
-function trackMyPresence() {
-  const room = App.room;
-  if (!room || !room.presenceChannel || !room.myLocation) return;
-  room.presenceChannel.track({
-    user_id: App.profile.id, username: App.profile.username,
-    lat: room.myLocation.lat, lng: room.myLocation.lng, heading: room.myLocation.heading,
-    speed: room.myLocation.speed, accuracy: room.myLocation.accuracy,
-    updated_at: room.myLocation.updated_at, talking: room.talking
-  });
+function cleanupChannels(){
+  [locChannel,memberChannel,speakChannel,routeChannel,presenceChannel].forEach(ch=>{ if(ch) sb.removeChannel(ch); });
+  locChannel=memberChannel=speakChannel=routeChannel=presenceChannel=null;
+  Object.values(peers).forEach(pc=>pc.close()); peers={};
+  Object.values(audioEls).forEach(a=>a.remove()); audioEls={};
 }
 
-function trackMyTalkingState(talking) {
-  const room = App.room;
-  if (!room) return;
-  room.talking = talking;
-  const mine = room.presenceState.get(App.profile.id);
-  if (mine) { mine.talking = talking; upsertMarker(App.profile.id, mine); }
-  if (room.presenceChannel) {
-    room.presenceChannel.track({
-      user_id: App.profile.id, username: App.profile.username,
-      lat: mine ? mine.lat : null, lng: mine ? mine.lng : null, heading: mine ? mine.heading : null,
-      speed: mine ? mine.speed : 0, accuracy: mine ? mine.accuracy : null,
-      updated_at: mine ? mine.updated_at : new Date().toISOString(), talking
-    });
-  }
-  renderMemberDrawer();
-}
-
-/* ============================================================================
-   18. REALTIME POSTGRES_CHANGES — membership, convoy settings, routes, signals
-   ============================================================================ */
-function subscribeRoomRealtime() {
-  const room = App.room;
-  const convoyId = room.convoyId;
-
-  const membersCh = supabase.channel(`db-members-${convoyId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'convoy_members', filter: `convoy_id=eq.${convoyId}` },
-      (payload) => handleMemberChange(payload))
-    .subscribe();
-  room.dbChannels.push(membersCh);
-
-  const convoyCh = supabase.channel(`db-convoy-${convoyId}`)
-    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'convoys', filter: `id=eq.${convoyId}` },
-      (payload) => { room.convoy = payload.new; applyPttUiForConvoyState(); renderRoomHeader(); })
-    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'convoys', filter: `id=eq.${convoyId}` },
-      () => { toast('This convoy was deleted by its creator', 'warn'); exitConvoyRoom(); })
-    .subscribe();
-  room.dbChannels.push(convoyCh);
-
-  const routesCh = supabase.channel(`db-routes-${convoyId}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'convoy_routes', filter: `convoy_id=eq.${convoyId}` },
-      (payload) => {
-        if (payload.eventType === 'DELETE') { room.routeDestination = null; clearRouteUi(); }
-        else { room.routeDestination = payload.new; drawRoute(payload.new); }
-      })
-    .subscribe();
-  room.dbChannels.push(routesCh);
-
-  const signalsCh = supabase.channel(`db-signals-${App.profile.id}`)
-    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'webrtc_signals', filter: `to_user=eq.${App.profile.id}` },
-      (payload) => handleIncomingSignal(payload.new))
-    .subscribe();
-  room.dbChannels.push(signalsCh);
-}
-
-function handleMemberChange(payload) {
-  const room = App.room;
-  if (payload.eventType === 'DELETE') {
-    const userId = payload.old.user_id;
-    if (userId === App.profile.id) {
-      toast('You were removed from this convoy', 'warn');
-      exitConvoyRoom();
-      return;
-    }
-    room.members.delete(userId);
-    removeMarker(userId);
-    room.presenceState.delete(userId);
-    closePeerConnection(userId);
-    renderMemberDrawer();
-    if (isCreator()) renderMemberManageList();
-  } else {
-    // INSERT or UPDATE — (re)fetch that member's public profile then merge
-    supabase.from('public_profiles').select('id, username, full_name, blood_group')
-      .eq('id', payload.new.user_id).maybeSingle().then(({ data }) => {
-        room.members.set(payload.new.user_id, {
-          username: data ? data.username : 'unknown', full_name: data ? data.full_name : '',
-          blood_group: data ? data.blood_group : '', role: payload.new.role, can_set_route: payload.new.can_set_route
-        });
-        if (payload.new.user_id === App.profile.id) {
-          room.myMembership = { role: payload.new.role, can_set_route: payload.new.can_set_route };
-          renderRoomHeader();
-        }
-        renderMemberDrawer();
-        if (isCreator()) renderMemberManageList();
-      });
+async function handleReconnect(){
+  if(activeConvoy){
+    subscribeConvoyRealtime();
+    if(!watchId) startLocationTracking();
   }
 }
 
+/* ======================================================================
+   GPS TRACKING (battery-efficient: time+distance throttled)
+   ====================================================================== */
+function startLocationTracking(){
+  if(!navigator.geolocation){ toast('Geolocation not supported'); return; }
+  if(!myProfile.location_enabled){ toast('Location sharing is OFF in your profile'); return; }
+  if(watchId) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(onPosition, onPosError, {
+    enableHighAccuracy:true, maximumAge:2000, timeout:15000
+  });
+}
+function stopLocationTracking(){ if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; } }
 
-/* ============================================================================
-   19. WEBRTC — mesh push-to-talk voice
-   ============================================================================
-   Small-group mesh: every member holds one RTCPeerConnection to every other
-   member. Signalling (SDP + ICE) travels through the `webrtc_signals` table,
-   which Realtime delivers instantly and RLS locks to "only the addressed
-   recipient can read it, only a fellow convoy member can send it". Audio
-   itself never touches Supabase — it flows browser-to-browser once
-   connected. This scales well for a typical convoy (a couple to a handful of
-   vehicles); very large groups would need a media server (SFU), which is
-   out of scope for a static, serverless app.
-   ============================================================================ */
-
-async function ensureLocalStream() {
-  const room = App.room;
-  if (room.localStream) return room.localStream;
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-    });
-    stream.getAudioTracks().forEach(t => { t.enabled = false; }); // start muted; PTT/open-mic controls this
-    room.localStream = stream;
-    setupVAD(stream);
-    // Attach the (currently muted) track to any peer connections already open
-    room.peers.forEach(({ pc }) => {
-      stream.getTracks().forEach(track => {
-        if (!pc.getSenders().find(s => s.track === track)) pc.addTrack(track, stream);
-      });
-    });
-    return stream;
-  } catch (err) {
-    toast('Microphone permission denied. Push-to-talk is disabled.', 'error');
-    $('#pttBtn').classList.add('disabled-btn');
-    $('#pttStatus').textContent = 'Microphone permission needed';
-    return null;
+async function onPosition(pos){
+  const {latitude:lat, longitude:lng, heading, speed, accuracy} = pos.coords;
+  const now=Date.now();
+  let movedEnough = true;
+  if(lastPos){
+    const d=haversine(lastPos.lat,lastPos.lng,lat,lng);
+    movedEnough = d>3; // only push if moved >3m, saves battery/network
   }
+  lastPos={lat,lng};
+  if(myMarker){ myMarker.setLatLng([lat,lng]); } 
+  if(!activeConvoy || !myProfile.location_enabled) return;
+  if(!activeMembership || activeMembership.share_location===false){ renderMemberList(); return; }
+  if(now-lastSentAt < 3000 && movedEnough===false) { renderMemberList(); return; }
+  lastSentAt=now;
+  await sb.from('locations').upsert({
+    user_id:currentUser.id, convoy_id:activeConvoy.id, lat, lng,
+    heading: heading==null?null:heading, speed: speed==null?null:speed, accuracy,
+    updated_at:new Date().toISOString()
+  },{onConflict:'user_id'});
+  renderMemberList();
+}
+function onPosError(err){ toast('Location error: '+err.message); }
+
+/* ======================================================================
+   ROUTE SEARCH (Nominatim geocoding + Leaflet Routing Machine)
+   ====================================================================== */
+async function searchDestination(){
+  const q=$('route-search-input').value.trim();
+  if(!q){ toast('Enter a destination'); return; }
+  if(!lastPos){ toast('Waiting for your location…'); return; }
+  try{
+    const res=await fetch('https://nominatim.openstreetmap.org/search?format=json&q='+encodeURIComponent(q));
+    const data=await res.json();
+    if(!data.length){ toast('Place not found'); return; }
+    const dest=data[0];
+    await sb.from('route_points').upsert({
+      convoy_id:activeConvoy.id, origin_lat:lastPos.lat, origin_lng:lastPos.lng,
+      origin_label:'Convoy Start', dest_lat:parseFloat(dest.lat), dest_lng:parseFloat(dest.lon),
+      dest_label:dest.display_name.split(',')[0], set_by:currentUser.id, updated_at:new Date().toISOString()
+    },{onConflict:'convoy_id'});
+    drawRoute(lastPos.lat,lastPos.lng,parseFloat(dest.lat),parseFloat(dest.lon),dest.display_name.split(',')[0]);
+  }catch(e){ toast('Search failed'); }
+}
+function drawRoute(oLat,oLng,dLat,dLng,label){
+  if(routeControl){ map.removeControl(routeControl); routeControl=null; }
+  routeControl = L.Routing.control({
+    waypoints:[L.latLng(oLat,oLng), L.latLng(dLat,dLng)],
+    routeWhileDragging:false, addWaypoints:false, draggableWaypoints:false,
+    show:false, createMarker:(i,wp)=> L.marker(wp.latLng).bindPopup(i===0?'Start':(label||'Destination'))
+  }).addTo(map);
+}
+async function clearRoute(){
+  await sb.from('route_points').delete().eq('convoy_id',activeConvoy.id);
+  if(routeControl){ map.removeControl(routeControl); routeControl=null; }
 }
 
-function setupVAD(stream) {
-  const room = App.room;
-  try {
-    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-    room.audioCtx = new AudioContextClass();
-    const source = room.audioCtx.createMediaStreamSource(stream);
-    room.analyser = room.audioCtx.createAnalyser();
-    room.analyser.fftSize = 512;
-    source.connect(room.analyser);
-    const data = new Uint8Array(room.analyser.frequencyBinCount);
+/* ======================================================================
+   PUSH-TO-TALK (WebRTC mesh via Supabase Realtime Broadcast signaling)
+   ====================================================================== */
+const RTC_CONFIG = { iceServers:[{urls:'stun:stun.l.google.com:19302'}] };
 
-    const tick = () => {
-      if (!App.room || App.room !== room) return;
-      const track = stream.getAudioTracks()[0];
-      if (track && track.enabled) {
-        room.analyser.getByteTimeDomainData(data);
-        let sumSq = 0;
-        for (let i = 0; i < data.length; i++) { const v = (data[i] - 128) / 128; sumSq += v * v; }
-        const rms = Math.sqrt(sumSq / data.length);
-        const isTalking = rms > TALK_VOLUME_THRESHOLD;
-        if (isTalking !== room.talking) trackMyTalkingState(isTalking);
-      } else if (room.talking) {
-        trackMyTalkingState(false);
-      }
-      room.vadRAF = requestAnimationFrame(tick);
-    };
-    room.vadRAF = requestAnimationFrame(tick);
-  } catch (e) { console.warn('VAD setup failed (non-fatal):', e); }
-}
-
-function ensurePeerConnectionForJoin(peerId) {
-  const room = App.room;
-  if (room.peers.has(peerId)) return;
-  const pc = createPeerConnection(peerId);
-  // Glare-avoidance: the peer with the lexicographically smaller id initiates.
-  if (App.profile.id < peerId) makeOffer(peerId, pc);
-}
-
-function createPeerConnection(peerId) {
-  const room = App.room;
-  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
-
-  if (room.localStream) {
-    room.localStream.getTracks().forEach(track => pc.addTrack(track, room.localStream));
+async function initPTT(){
+  const btn=$('ptt-btn');
+  btn.disabled=false;
+  updatePTTStatus();
+  try{
+    localStream = await navigator.mediaDevices.getUserMedia({audio:true});
+    localStream.getAudioTracks().forEach(t=> t.enabled = (activeConvoy.ptt_enabled===false));
+  }catch(e){
+    toast('Microphone permission denied');
+    btn.disabled=true;
+    return;
   }
 
-  pc.onicecandidate = (e) => {
-    if (e.candidate) sendSignal(peerId, 'ice-candidate', e.candidate.toJSON());
-  };
-  pc.ontrack = (e) => {
-    let entry = room.peers.get(peerId);
-    let audioEl = entry && entry.audioEl;
-    if (!audioEl) {
-      audioEl = document.createElement('audio');
-      audioEl.autoplay = true;
-      audioEl.playsInline = true;
-      $('#remoteAudios').appendChild(audioEl);
-    }
-    audioEl.srcObject = e.streams[0];
-    audioEl.play().catch(() => {}); // autoplay may need a user gesture on some browsers; PTT press covers this
-    room.peers.set(peerId, { pc, audioEl });
-  };
-  pc.onconnectionstatechange = () => {
-    if (['failed', 'closed', 'disconnected'].includes(pc.connectionState)) {
-      // Leave cleanup to the presence 'leave' handler / explicit close, to
-      // avoid tearing down a connection that's just briefly reconnecting.
-    }
-  };
-
-  room.peers.set(peerId, { pc, audioEl: (room.peers.get(peerId) || {}).audioEl || null });
-  return pc;
+  const start=(e)=>{ e.preventDefault(); startTalking(); };
+  const stop=(e)=>{ e.preventDefault(); stopTalking(); };
+  btn.onmousedown=start; btn.ontouchstart=start;
+  btn.onmouseup=stop; btn.ontouchend=stop; btn.onmouseleave=stop; btn.ontouchcancel=stop;
 }
 
-async function makeOffer(peerId, pc) {
-  try {
+function updatePTTStatus(){
+  const btn=$('ptt-btn'); const st=$('ptt-status');
+  if(activeConvoy.is_muted){ st.textContent='Convoy is silenced by admin'; btn.disabled=true; return; }
+  btn.disabled=false;
+  if(activeConvoy.ptt_enabled===false){ st.textContent='Open mic mode — everyone can talk freely'; btn.textContent='MIC\nOPEN'; }
+  else { st.textContent='Hold to talk'; btn.textContent='HOLD\nTO TALK'; }
+}
+
+async function startTalking(){
+  if(activeConvoy.is_muted || activeConvoy.ptt_enabled===false) return;
+  pttHeld=true;
+  $('ptt-btn').classList.add('active');
+  localStream.getAudioTracks().forEach(t=>t.enabled=true);
+  await setSpeaking(true);
+}
+async function stopTalking(){
+  if(activeConvoy.ptt_enabled===false) return;
+  pttHeld=false;
+  $('ptt-btn').classList.remove('active');
+  localStream.getAudioTracks().forEach(t=>t.enabled=false);
+  await setSpeaking(false);
+}
+async function setSpeaking(val){
+  await sb.from('speaking_status').upsert({
+    user_id:currentUser.id, convoy_id:activeConvoy.id, is_speaking: activeConvoy.is_muted? false: val, updated_at:new Date().toISOString()
+  },{onConflict:'user_id'});
+}
+
+/* --- WebRTC signaling helpers --- */
+function sendSignal(to,data){
+  signalChannel.send({type:'broadcast',event:'signal',payload:{to,from:currentUser.id,...data}});
+}
+async function connectToPeer(otherId){
+  if(peers[otherId] || otherId===currentUser.id) return;
+  const polite = currentUser.id < otherId; // lower id = initiator
+  const pc = createPeerConnection(otherId);
+  peers[otherId]=pc;
+  if(polite){
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    sendSignal(peerId, 'offer', { sdp: offer.sdp, type: offer.type });
-  } catch (e) { console.warn('makeOffer failed', e); }
+    sendSignal(otherId,{sdp:pc.localDescription});
+  }
 }
-
-async function sendSignal(toUser, signal_type, payload) {
-  const room = App.room;
-  const { error } = await supabase.from('webrtc_signals').insert({
-    convoy_id: room.convoyId, from_user: App.profile.id, to_user: toUser, signal_type, payload
-  });
-  if (error) console.warn('Signal send failed:', error.message);
+function createPeerConnection(otherId){
+  const pc = new RTCPeerConnection(RTC_CONFIG);
+  if(localStream) localStream.getTracks().forEach(t=>pc.addTrack(t,localStream));
+  pc.onicecandidate = e=>{ if(e.candidate) sendSignal(otherId,{candidate:e.candidate}); };
+  pc.ontrack = e=>{
+    let audio = audioEls[otherId];
+    if(!audio){ audio=document.createElement('audio'); audio.autoplay=true; audio.playsInline=true; document.body.appendChild(audio); audioEls[otherId]=audio; }
+    audio.srcObject = e.streams[0];
+  };
+  return pc;
 }
-
-async function handleIncomingSignal(row) {
-  const room = App.room;
-  if (!room) return;
-  const peerId = row.from_user;
-  try {
-    if (row.signal_type === 'offer') {
-      const pc = room.peers.get(peerId) ? room.peers.get(peerId).pc : createPeerConnection(peerId);
-      await pc.setRemoteDescription(new RTCSessionDescription(row.payload));
+async function handleSignal(payload){
+  if(payload.to!==currentUser.id) return;
+  const otherId=payload.from;
+  let pc=peers[otherId];
+  if(!pc){ pc=createPeerConnection(otherId); peers[otherId]=pc; }
+  if(payload.sdp){
+    await pc.setRemoteDescription(new RTCSessionDescription(payload.sdp));
+    if(payload.sdp.type==='offer'){
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      sendSignal(peerId, 'answer', { sdp: answer.sdp, type: answer.type });
-    } else if (row.signal_type === 'answer') {
-      const entry = room.peers.get(peerId);
-      if (entry) await entry.pc.setRemoteDescription(new RTCSessionDescription(row.payload));
-    } else if (row.signal_type === 'ice-candidate') {
-      const entry = room.peers.get(peerId);
-      if (entry) await entry.pc.addIceCandidate(new RTCIceCandidate(row.payload)).catch(() => {});
-    } else if (row.signal_type === 'bye') {
-      closePeerConnection(peerId);
+      sendSignal(otherId,{sdp:pc.localDescription});
     }
-  } catch (e) {
-    console.warn('Error handling signal', row.signal_type, e);
-  } finally {
-    supabase.from('webrtc_signals').delete().eq('id', row.id).then(() => {}); // consume
+  } else if(payload.candidate){
+    try{ await pc.addIceCandidate(new RTCIceCandidate(payload.candidate)); }catch(e){}
   }
 }
 
-function closePeerConnection(peerId) {
-  const room = App.room;
-  if (!room) return;
-  const entry = room.peers.get(peerId);
-  if (entry) {
-    try { entry.pc.close(); } catch (e) {}
-    if (entry.audioEl) { entry.audioEl.srcObject = null; entry.audioEl.remove(); }
-    room.peers.delete(peerId);
-  }
+/* ======================================================================
+   CONVOY SETTINGS (owner/admin controls) + member management
+   ====================================================================== */
+function openConvoySettings(){
+  const isOwner = activeMembership.role==='owner';
+  renderModal(`
+    <button class="close-x" onclick="closeModal()">✕</button>
+    <h3>${activeConvoy.name}</h3>
+    <p class="muted">Convoy code: <b>${activeConvoy.code}</b></p>
+    <div class="switch-row">
+      <div><b>Share my location in this convoy</b></div>
+      <label class="switch"><input type="checkbox" id="set-share" ${activeMembership.share_location?'checked':''} onchange="toggleShareLocation()"><span class="slider"></span></label>
+    </div>
+    ${isOwner?`
+    <div class="switch-row">
+      <div><b>Require Push-to-Talk</b><div class="muted">Off = open mic for everyone</div></div>
+      <label class="switch"><input type="checkbox" id="set-ptt" ${activeConvoy.ptt_enabled?'checked':''} onchange="togglePTTMode()"><span class="slider"></span></label>
+    </div>
+    <div class="switch-row">
+      <div><b>Silence Entire Group</b><div class="muted">Nobody can transmit audio</div></div>
+      <label class="switch"><input type="checkbox" id="set-mute" ${activeConvoy.is_muted?'checked':''} onchange="toggleMuteAll()"><span class="slider"></span></label>
+    </div>
+    <div class="field" style="margin-top:12px;"><label>Add member by username</label>
+      <div class="row"><input id="add-username" placeholder="username"><button class="btn small" onclick="addMemberByUsername()">Add</button></div>
+    </div>
+    <button class="btn danger" style="margin-top:10px;" onclick="deleteConvoy()">Delete Convoy</button>
+    `:''}
+  `);
 }
 
-function teardownWebRTC() {
-  const room = App.room;
-  if (!room) return;
-  room.peers.forEach((_, peerId) => closePeerConnection(peerId));
-  if (room.localStream) { room.localStream.getTracks().forEach(t => t.stop()); room.localStream = null; }
-  if (room.vadRAF) cancelAnimationFrame(room.vadRAF);
-  if (room.audioCtx) { room.audioCtx.close().catch(() => {}); room.audioCtx = null; }
+async function toggleShareLocation(){
+  const val=$('set-share').checked;
+  await sb.from('convoy_members').update({share_location:val}).eq('convoy_id',activeConvoy.id).eq('user_id',currentUser.id);
+  activeMembership.share_location=val;
+  toast(val?'Sharing location with this convoy':'Location hidden from this convoy');
+}
+async function togglePTTMode(){
+  const val=$('set-ptt').checked;
+  await sb.from('convoys').update({ptt_enabled:val}).eq('id',activeConvoy.id);
+  activeConvoy.ptt_enabled=val; updatePTTStatus();
+}
+async function toggleMuteAll(){
+  const val=$('set-mute').checked;
+  await sb.from('convoys').update({is_muted:val}).eq('id',activeConvoy.id);
+  activeConvoy.is_muted=val; updatePTTStatus();
+  if(val){ localStream && localStream.getAudioTracks().forEach(t=>t.enabled=false); }
+}
+async function addMemberByUsername(){
+  const uname=$('add-username').value.trim().toLowerCase();
+  const {data:prof}=await sb.from('profiles').select('*').eq('username',uname).maybeSingle();
+  if(!prof){ toast('User not found'); return; }
+  await sb.from('convoy_members').upsert({convoy_id:activeConvoy.id,user_id:prof.id,role:'member'},{onConflict:'convoy_id,user_id'});
+  await sb.from('saved_convoys').upsert({user_id:prof.id,convoy_id:activeConvoy.id},{onConflict:'user_id,convoy_id'});
+  toast('Added @'+uname); closeModal(); await loadMembers();
+}
+async function removeMember(userId){
+  if(!confirm('Remove this member from the convoy?')) return;
+  await sb.from('convoy_members').delete().eq('convoy_id',activeConvoy.id).eq('user_id',userId);
+  await loadMembers();
+}
+async function toggleRouteAccess(userId,val){
+  await sb.from('convoy_members').update({can_manage_route:val}).eq('convoy_id',activeConvoy.id).eq('user_id',userId);
+  await loadMembers();
+}
+async function deleteConvoy(){
+  if(!confirm('Delete this convoy permanently for everyone?')) return;
+  await sb.from('convoys').delete().eq('id',activeConvoy.id);
+  closeModal();
+  await leaveConvoyView(true);
+  await loadMyConvoys();
 }
 
+/* ======================================================================
+   LEAVE CONVOY (compulsory on exit — membership removed, saved kept)
+   ====================================================================== */
+async function leaveConvoyView(skipConfirm){
+  if(!activeConvoy) { hide('view-convoy'); show('view-home'); return; }
+  if(!skipConfirm && !confirm('Leaving will remove you from the live convoy (you can rejoin anytime from your list). Continue?')) return;
 
-/* ============================================================================
-   20. PUSH-TO-TALK BUTTON
-   ============================================================================ */
-function applyPttUiForConvoyState() {
-  const room = App.room;
-  const btn = $('#pttBtn');
-  const status = $('#pttStatus');
-  if (!room) return;
+  stopLocationTracking();
+  if(localStream){ localStream.getTracks().forEach(t=>t.stop()); localStream=null; }
+  cleanupChannels();
+  await sb.from('locations').delete().eq('user_id',currentUser.id).eq('convoy_id',activeConvoy.id);
+  await sb.from('speaking_status').delete().eq('user_id',currentUser.id).eq('convoy_id',activeConvoy.id);
+  await sb.from('convoy_members').delete().eq('convoy_id',activeConvoy.id).eq('user_id',currentUser.id);
 
-  if (room.convoy.is_muted) {
-    btn.classList.add('disabled-btn');
-    btn.classList.remove('open-live', 'talking');
-    status.textContent = 'Voice disabled by the convoy admin';
-    // Force-mute immediately if we were mid-transmission.
-    if (room.localStream) room.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-    room.openMicJoined = false;
-  } else if (room.convoy.ptt_enabled === false) {
-    btn.classList.remove('disabled-btn');
-    status.textContent = room.openMicJoined ? 'Open mic — tap to leave voice' : 'Open mic mode — tap to join voice';
-    btn.classList.toggle('open-live', !!room.openMicJoined);
-  } else {
-    btn.classList.remove('disabled-btn', 'open-live');
-    status.textContent = 'Hold to talk';
-    room.openMicJoined = false;
-    if (room.localStream) room.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-  }
+  activeConvoy=null; activeMembership=null; members={};
+  if(map){ map.remove(); map=null; }
+  hide('view-convoy'); show('view-home');
+  await loadMyConvoys();
 }
 
-async function pttPress() {
-  const room = App.room;
-  if (!room || room.convoy.is_muted) return;
-  if (room.convoy.ptt_enabled === false) return; // open-mic mode handled by pttTap, not hold
-  const stream = await ensureLocalStream();
-  if (!stream) return;
-  stream.getAudioTracks().forEach(t => { t.enabled = true; });
-  room.pttHeld = true;
-  $('#pttBtn').classList.add('talking');
-  $('#pttStatus').textContent = 'Transmitting…';
+/* ======================================================================
+   PROFILE
+   ====================================================================== */
+function openProfile(){
+  $('pf-name').value=myProfile.full_name;
+  $('pf-username').value=myProfile.username;
+  $('pf-mobile').value=myProfile.mobile_number;
+  $('pf-blood').value=myProfile.blood_group;
+  $('pf-location-toggle').checked=myProfile.location_enabled;
+  hide('view-home'); show('view-profile');
 }
-function pttRelease() {
-  const room = App.room;
-  if (!room || !room.pttHeld) return;
-  room.pttHeld = false;
-  if (room.localStream) room.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-  $('#pttBtn').classList.remove('talking');
-  $('#pttStatus').textContent = 'Hold to talk';
-  trackMyTalkingState(false);
+function closeProfile(){ hide('view-profile'); show('view-home'); }
+async function saveProfile(){
+  const updates={
+    full_name:$('pf-name').value.trim(), username:$('pf-username').value.trim().toLowerCase(),
+    mobile_number:$('pf-mobile').value.trim(), blood_group:$('pf-blood').value
+  };
+  const {error}=await sb.from('profiles').update(updates).eq('id',currentUser.id);
+  if(error){ toast('Error: '+error.message); return; }
+  Object.assign(myProfile,updates);
+  toast('Profile saved');
 }
-
-async function pttTapOpenMic() {
-  const room = App.room;
-  if (!room || room.convoy.is_muted) return;
-  room.openMicJoined = !room.openMicJoined;
-  if (room.openMicJoined) {
-    const stream = await ensureLocalStream();
-    if (!stream) { room.openMicJoined = false; return; }
-    stream.getAudioTracks().forEach(t => { t.enabled = true; });
-  } else if (room.localStream) {
-    room.localStream.getAudioTracks().forEach(t => { t.enabled = false; });
-    trackMyTalkingState(false);
-  }
-  applyPttUiForConvoyState();
+async function toggleGlobalLocation(){
+  const val=$('pf-location-toggle').checked;
+  await sb.from('profiles').update({location_enabled:val}).eq('id',currentUser.id);
+  myProfile.location_enabled=val;
+  if(val){ startLocationTracking(); } else { stopLocationTracking(); if(activeConvoy) await sb.from('locations').delete().eq('user_id',currentUser.id).eq('convoy_id',activeConvoy.id); }
+  toast(val?'Location sharing enabled':'Location sharing disabled everywhere');
 }
 
-const pttBtn = $('#pttBtn');
-pttBtn.addEventListener('pointerdown', (e) => {
-  e.preventDefault();
-  const room = App.room; if (!room) return;
-  if (room.convoy.ptt_enabled === false) { pttTapOpenMic(); return; }
-  pttBtn.setPointerCapture(e.pointerId);
-  pttPress();
-});
-['pointerup', 'pointercancel', 'pointerleave'].forEach(evt => {
-  pttBtn.addEventListener(evt, () => {
-    const room = App.room; if (!room) return;
-    if (room.convoy.ptt_enabled === false) return;
-    pttRelease();
+/* ======================================================================
+   ADMIN (Ads) — only visible to profiles.is_admin
+   ====================================================================== */
+function openAdmin(){
+  if(!myProfile.is_admin){ toast('Admin access only'); return; }
+  hide('view-home'); show('view-admin'); loadAdManageList();
+}
+function closeAdmin(){ hide('view-admin'); show('view-home'); }
+async function createAd(){
+  const title=$('ad-title').value.trim(), media_url=$('ad-media').value.trim();
+  const media_type=$('ad-type').value, link_url=$('ad-link').value.trim()||null;
+  if(!title||!media_url){ toast('Title and media URL required'); return; }
+  const {error}=await sb.from('ads').insert({title,media_url,media_type,link_url,active:true,created_by:currentUser.id});
+  if(error){ toast(error.message); return; }
+  $('ad-title').value=''; $('ad-media').value=''; $('ad-link').value='';
+  toast('Ad published'); loadAdManageList(); loadAds();
+}
+async function loadAdManageList(){
+  const {data}=await sb.from('ads').select('*').order('created_at',{ascending:false});
+  const list=$('ad-manage-list'); list.innerHTML='';
+  (data||[]).forEach(ad=>{
+    const div=document.createElement('div'); div.className='card';
+    div.innerHTML=`<b>${ad.title}</b> <span class="badge">${ad.active?'ACTIVE':'HIDDEN'}</span>
+      <p class="muted" style="word-break:break-all;">${ad.media_url}</p>
+      <div class="row">
+        <button class="btn small secondary" onclick="toggleAd('${ad.id}',${!ad.active})">${ad.active?'Hide':'Show'}</button>
+        <button class="btn small danger" onclick="deleteAd('${ad.id}')">Delete</button>
+      </div>`;
+    list.appendChild(div);
   });
-});
+}
+async function toggleAd(id,val){ await sb.from('ads').update({active:val}).eq('id',id); loadAdManageList(); loadAds(); }
+async function deleteAd(id){ if(!confirm('Delete this ad?'))return; await sb.from('ads').delete().eq('id',id); loadAdManageList(); loadAds(); }
 
+/* ======================================================================
+   MODAL HELPER
+   ====================================================================== */
+function renderModal(innerHtml){
+  $('modal-root').innerHTML = `<div class="modal-overlay" onclick="if(event.target===this)closeModal()"><div class="modal">${innerHtml}</div></div>`;
+}
+function closeModal(){ $('modal-root').innerHTML=''; }
 
-/* ============================================================================
-   21. ROUTE SEARCH + SHARED DESTINATION ROUTING (admin / navigator only)
-   ============================================================================
-   The creator (or anyone they've granted route access to) searches a place
-   name via OpenStreetMap Nominatim and sets it as the convoy's destination.
-   That destination is stored once in `convoy_routes` and broadcast to every
-   member; each member's own client then draws ITS OWN route from wherever
-   THEY currently are to that shared destination, using the free OSRM demo
-   routing server.
-   ============================================================================ */
-let routeSearchDebounce = null;
-$('#routeSearchInput').addEventListener('input', (e) => {
-  clearTimeout(routeSearchDebounce);
-  const q = e.target.value.trim();
-  if (q.length < 3) { $('#routeResults').classList.add('hidden'); return; }
-  routeSearchDebounce = setTimeout(() => searchPlace(q), 500);
-});
+/* ======================================================================
+   PWA — manifest via data URI + best-effort service worker
+   ====================================================================== */
+(function setupPWA(){
+  const manifest = {
+    name:"Convoy Intercom", short_name:"Convoy", start_url:".", display:"standalone",
+    background_color:"#0f172a", theme_color:"#0f172a",
+    icons:[{src:"https://cdn-icons-png.flaticon.com/512/2554/2554936.png", sizes:"512x512", type:"image/png"}]
+  };
+  const link=document.createElement('link'); link.rel='manifest';
+  link.href='data:application/manifest+json,'+encodeURIComponent(JSON.stringify(manifest));
+  document.head.appendChild(link);
 
-async function searchPlace(q) {
-  try {
-    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`);
-    const results = await res.json();
-    const box = $('#routeResults');
-    if (!results.length) { box.innerHTML = `<div class="route-result-item">No results</div>`; box.classList.remove('hidden'); return; }
-    box.innerHTML = results.map((r, i) => `<div class="route-result-item" data-idx="${i}">${escapeHTML(r.display_name)}</div>`).join('');
-    box.classList.remove('hidden');
-    $$('.route-result-item', box).forEach(el => {
-      el.addEventListener('click', () => {
-        const r = results[parseInt(el.dataset.idx, 10)];
-        if (r) selectDestination(parseFloat(r.lat), parseFloat(r.lon), r.display_name);
-      });
-    });
-  } catch (e) {
-    toast('Place search failed. Check your connection.', 'error');
+  if('serviceWorker' in navigator){
+    const swCode = `
+      self.addEventListener('install',e=>self.skipWaiting());
+      self.addEventListener('activate',e=>self.clients.claim());
+      self.addEventListener('fetch',e=>{});
+    `;
+    try{
+      const blob=new Blob([swCode],{type:'application/javascript'});
+      const swUrl=URL.createObjectURL(blob);
+      navigator.serviceWorker.register(swUrl).catch(()=>{ /* offline caching unavailable on this host; app still works online */ });
+    }catch(e){ /* ignore - non-critical */ }
   }
-}
+})();
 
-async function selectDestination(lat, lng, label) {
-  $('#routeResults').classList.add('hidden');
-  $('#routeSearchInput').value = '';
-  const room = App.room;
-  const { error } = await supabase.from('convoy_routes').upsert({
-    convoy_id: room.convoyId, destination_lat: lat, destination_lng: lng,
-    destination_label: label, set_by: App.profile.id
-  }, { onConflict: 'convoy_id' });
-  if (error) { toast(error.message, 'error'); return; }
-  toast('Route set for the whole convoy', 'success');
-}
-
-$('#routeClearBtn').addEventListener('click', clearConvoyRoute);
-$('#routeActiveClearBtn').addEventListener('click', clearConvoyRoute);
-async function clearConvoyRoute() {
-  const room = App.room;
-  if (!canSetRoute()) return;
-  const { error } = await supabase.from('convoy_routes').delete().eq('convoy_id', room.convoyId);
-  if (error) { toast(error.message, 'error'); return; }
-  room.routeDestination = null;
-  clearRouteUi();
-}
-
-function drawRoute(routeRow) {
-  const room = App.room;
-  if (!room || !room.map) return;
-  const mine = room.presenceState.get(App.profile.id);
-  const start = mine && mine.lat != null ? L.latLng(mine.lat, mine.lng) : room.map.getCenter();
-  const dest = L.latLng(routeRow.destination_lat, routeRow.destination_lng);
-
-  if (room.routingControl) {
-    room.routingControl.setWaypoints([start, dest]);
-  } else {
-    room.routingControl = L.Routing.control({
-      waypoints: [start, dest],
-      router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-      show: false, addWaypoints: false, draggableWaypoints: false, fitSelectedRoutes: true,
-      lineOptions: { styles: [{ color: '#ff8a34', weight: 5, opacity: 0.85 }] },
-      createMarker: (i, wp) => (i === 1 ? L.marker(wp.latLng) : null) // only mark the destination
-    }).addTo(room.map);
-  }
-
-  $('#routeActiveBanner').classList.remove('hidden');
-  $('#routeActiveText').textContent = `Routing to ${routeRow.destination_label || 'destination'}`;
-  if (!room.routeUpdateTimer) {
-    room.routeUpdateTimer = setInterval(updateRouteStart, 15000); // re-anchor start point periodically
-  }
-}
-
-function updateRouteStart() {
-  const room = App.room;
-  if (!room || !room.routingControl || !room.routeDestination) return;
-  const mine = room.presenceState.get(App.profile.id);
-  if (!mine || mine.lat == null) return;
-  const dest = L.latLng(room.routeDestination.destination_lat, room.routeDestination.destination_lng);
-  room.routingControl.setWaypoints([L.latLng(mine.lat, mine.lng), dest]);
-}
-
-function clearRouteUi() {
-  const room = App.room;
-  if (room.routingControl && room.map) { room.map.removeControl(room.routingControl); room.routingControl = null; }
-  if (room.routeUpdateTimer) { clearInterval(room.routeUpdateTimer); room.routeUpdateTimer = null; }
-  $('#routeActiveBanner').classList.add('hidden');
-}
-
-
-/* ============================================================================
-   22. CONVOY SETTINGS MODAL
-   ============================================================================ */
-$('#openRoomSettingsBtn').addEventListener('click', () => {
-  const room = App.room; if (!room) return;
-  $('#myVisibilityToggle').checked = room.myVisible !== false;
-  $('#adminSettingsSection').classList.toggle('hidden', !isCreator());
-  if (isCreator()) {
-    $('#pttModeToggle').checked = !!room.convoy.ptt_enabled;
-    $('#muteAllToggle').checked = !!room.convoy.is_muted;
-    renderMemberManageList();
-  }
-  openModal('modalConvoySettings');
+/* attach map interaction listeners once map exists (delegated) */
+document.addEventListener('DOMContentLoaded',()=>{
+  const observer=new MutationObserver(()=>{ if(map){ map.on('dragstart zoomstart',markUserMoved); } });
+  observer.observe(document.body,{childList:true,subtree:true});
 });
-
-$('#myVisibilityToggle').addEventListener('change', async (e) => {
-  const room = App.room; if (!room) return;
-  const checked = e.target.checked;
-  try {
-    const { error } = await supabase.from('location_visibility').upsert({
-      convoy_id: room.convoyId, user_id: App.profile.id, is_visible: checked, updated_at: new Date().toISOString()
-    }, { onConflict: 'convoy_id,user_id' });
-    if (error) throw error;
-    room.myVisible = checked;
-    toast(checked ? 'Visible to this convoy again' : 'Hidden from this convoy', checked ? 'success' : 'warn');
-  } catch (err) {
-    e.target.checked = !checked;
-    toast(err.message || 'Could not update visibility', 'error');
-  }
-});
-
-$('#leaveConvoyBtn').addEventListener('click', async () => {
-  const room = App.room; if (!room) return;
-  const ok = await showConfirm('Leave this convoy?', 'You will need a new invite (or the join code) to come back.');
-  if (!ok) return;
-  const { error } = await supabase.from('convoy_members').delete().eq('convoy_id', room.convoyId).eq('user_id', App.profile.id);
-  if (error) { toast(error.message, 'error'); return; }
-  closeModal('modalConvoySettings');
-  toast('You left the convoy', 'success');
-  exitConvoyRoom();
-});
-
-$('#pttModeToggle').addEventListener('change', async (e) => {
-  const room = App.room; if (!room || !isCreator()) return;
-  const checked = e.target.checked;
-  const { data, error } = await supabase.from('convoys').update({ ptt_enabled: checked }).eq('id', room.convoyId).select().single();
-  if (error) { e.target.checked = !checked; toast(error.message, 'error'); return; }
-  room.convoy = data; applyPttUiForConvoyState();
-  toast(checked ? 'Push-to-talk mode enabled' : 'Open mic mode enabled — anyone can talk freely', 'success');
-});
-
-$('#muteAllToggle').addEventListener('change', async (e) => {
-  const room = App.room; if (!room || !isCreator()) return;
-  const checked = e.target.checked;
-  const { data, error } = await supabase.from('convoys').update({ is_muted: checked }).eq('id', room.convoyId).select().single();
-  if (error) { e.target.checked = !checked; toast(error.message, 'error'); return; }
-  room.convoy = data; applyPttUiForConvoyState();
-  toast(checked ? 'Voice silenced for everyone' : 'Voice re-enabled', checked ? 'warn' : 'success');
-});
-
-function renderMemberManageList() {
-  const room = App.room;
-  if (!room) return;
-  const rows = [];
-  room.members.forEach((meta, userId) => {
-    if (meta.role === 'creator') return; // creator manages others, not themselves, from here
-    rows.push(`
-      <div class="member-manage-row">
-        <span class="mm-name">${escapeHTML(meta.username)} ${meta.role === 'navigator' ? '<span class="pill go">Navigator</span>' : ''}</span>
-        <div class="mm-actions">
-          <button class="btn btn-sm" data-toggle-nav="${userId}">${meta.role === 'navigator' ? 'Revoke navigator' : 'Make navigator'}</button>
-          <button class="btn btn-sm" data-toggle-route="${userId}">${meta.can_set_route ? 'Revoke route access' : 'Grant route access'}</button>
-          <button class="btn btn-sm btn-danger" data-kick="${userId}">Remove</button>
-        </div>
-      </div>
-    `);
-  });
-  $('#memberManageList').innerHTML = rows.join('') || `<p style="color:var(--text-faint); font-size:13px;">No other members yet. Add one below.</p>`;
-
-  $$('[data-toggle-nav]').forEach(b => b.addEventListener('click', () => toggleMemberRole(b.dataset.toggleNav, 'role')));
-  $$('[data-toggle-route]').forEach(b => b.addEventListener('click', () => toggleMemberRole(b.dataset.toggleRoute, 'route')));
-  $$('[data-kick]').forEach(b => b.addEventListener('click', () => kickMember(b.dataset.kick)));
-}
-
-async function toggleMemberRole(userId, kind) {
-  const room = App.room;
-  const meta = room.members.get(userId);
-  if (!meta) return;
-  try {
-    let params;
-    if (kind === 'role') params = { p_role: meta.role === 'navigator' ? 'member' : 'navigator' };
-    else params = { p_can_set_route: !meta.can_set_route };
-    const { error } = await supabase.rpc('set_member_role', {
-      p_convoy_id: room.convoyId, p_user_id: userId, p_role: params.p_role || null, p_can_set_route: params.p_can_set_route ?? null
-    });
-    if (error) throw error;
-    toast('Updated', 'success');
-    // The postgres_changes subscription on convoy_members will refresh the list automatically.
-  } catch (err) {
-    toast(err.message || 'Could not update member', 'error');
-  }
-}
-
-async function kickMember(userId) {
-  const room = App.room;
-  const meta = room.members.get(userId);
-  const ok = await showConfirm('Remove member?', `${meta ? meta.username : 'This member'} will be removed from the convoy.`);
-  if (!ok) return;
-  const { error } = await supabase.from('convoy_members').delete().eq('convoy_id', room.convoyId).eq('user_id', userId);
-  if (error) { toast(error.message, 'error'); return; }
-  toast('Member removed', 'success');
-}
-
-$('#addMemberBtn').addEventListener('click', async () => {
-  const room = App.room;
-  const username = $('#addMemberUsername').value.trim();
-  if (!username) return;
-  try {
-    const { error } = await supabase.rpc('add_member_by_username', { p_convoy_id: room.convoyId, p_username: username });
-    if (error) throw error;
-    $('#addMemberUsername').value = '';
-    toast('Member added', 'success');
-  } catch (err) {
-    toast(err.message || 'Could not add member', 'error');
-  }
-});
-
-$('#deleteConvoyBtn').addEventListener('click', async () => {
-  const room = App.room; if (!room || !isCreator()) return;
-  const ok = await showConfirm('Delete this convoy?', 'This permanently removes it for every member. This cannot be undone.');
-  if (!ok) return;
-  const { error } = await supabase.from('convoys').delete().eq('id', room.convoyId);
-  if (error) { toast(error.message, 'error'); return; }
-  closeModal('modalConvoySettings');
-  toast('Convoy deleted', 'success');
-  exitConvoyRoom();
-});
-
-
-/* ============================================================================
-   23. BOOTSTRAP
-   ============================================================================ */
-async function bootstrap() {
-  applyTheme();
-  setupPWA();
-  setConnDot(navigator.onLine);
-
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (session) {
-      await handleSignedIn(session);
-    } else {
-      $('#authScreen').classList.remove('hidden');
-    }
-  } catch (err) {
-    console.error('Bootstrap failed', err);
-    $('#authScreen').classList.remove('hidden');
-  }
-}
-
-// Best-effort resource cleanup if the tab is closed/backgrounded without a
-// normal "Exit" tap — prevents the classic bug of a GPS watch or open
-// microphone track surviving after the user has left the page.
-window.addEventListener('pagehide', () => {
-  if (App.room) {
-    stopGeolocationWatch();
-    teardownWebRTC();
-    releaseWakeLock();
-  }
-});
-
-document.addEventListener('DOMContentLoaded', bootstrap);
 </script>
 </body>
 </html>
